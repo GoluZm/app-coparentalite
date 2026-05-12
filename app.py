@@ -43,7 +43,7 @@ def append_row(sheet_name, row_list):
     worksheet.append_row(row_list)
 
 # --- CONFIGURATION DE LA PAGE ---
-st.set_page_config(page_title="Notre App Coparentale", page_icon="👨‍👩‍👧", layout="centered")
+st.set_page_config(page_title="App de garde Alternée", page_icon="👨‍👩‍👧", layout="centered")
 st.title("👨‍👩‍👧 Tableau de bord partagé")
 
 # --- PARAMÈTRES (SIDEBAR) ---
@@ -197,8 +197,38 @@ with tab2:
 # ==========================================
 # ONGLET 3 : FRAIS
 # ==========================================
+# ==========================================
+# ONGLET 3 : FRAIS
+# ==========================================
 with tab3:
     st.header("Dépenses Partagées")
+    
+    # --- CALCUL DES COMPTES (NOUVEAU) ---
+    if not df_frais.empty:
+        # On force la conversion en nombres pour éviter les bugs de calcul
+        df_frais['Montant (€)'] = pd.to_numeric(df_frais['Montant (€)'], errors='coerce').fillna(0)
+        
+        # On calcule les totaux
+        total_p1 = df_frais[df_frais['Payé par'] == nom_p1]['Montant (€)'].sum()
+        total_p2 = df_frais[df_frais['Payé par'] == nom_p2]['Montant (€)'].sum()
+        
+        # On affiche les compteurs
+        col_bilan1, col_bilan2, col_bilan3 = st.columns(3)
+        col_bilan1.metric(f"Total {nom_p1}", f"{total_p1:.2f} €")
+        col_bilan2.metric(f"Total {nom_p2}", f"{total_p2:.2f} €")
+        
+        # On calcule qui doit quoi à qui
+        diff = total_p1 - total_p2
+        if diff > 0:
+            col_bilan3.warning(f"⚠️ {nom_p2} doit {diff / 2:.2f} € à {nom_p1}")
+        elif diff < 0:
+            col_bilan3.warning(f"⚠️ {nom_p1} doit {abs(diff) / 2:.2f} € à {nom_p2}")
+        else:
+            col_bilan3.success("✅ Comptes à l'équilibre !")
+            
+        st.markdown("---") # Petite ligne de séparation
+        
+    # --- FORMULAIRE D'AJOUT ---
     with st.form("add_frais", clear_on_submit=True):
         c1, c2 = st.columns(2)
         dfra = c1.date_input("Date")
@@ -209,6 +239,7 @@ with tab3:
             append_row("Frais", [str(dfra), payeur, montant, descf])
             st.rerun()
             
+    # --- TABLEAU MODIFIABLE ---
     edited_frais = st.data_editor(df_frais, num_rows="dynamic", use_container_width=True)
     if st.button("Enregistrer les modifications de frais"):
         save_full_df("Frais", edited_frais)
