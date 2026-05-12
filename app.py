@@ -210,7 +210,7 @@ with tab3:
         c1, c2 = st.columns(2)
         dfra = c1.date_input("Date")
         payeur = c2.selectbox("Payé par", [nom_p1, nom_p2])
-        montant = st.number_input("Montant (€)", min_value=0.0, step=0.01, format="%.2f")
+        montant = st.number_input("Montant (€)", min_value=0.0, step=0.01, format="%.2")
         descf = st.text_input("Objet")
         if st.form_submit_button("Ajouter la dépense"):
             # On ajoute False par défaut (non remboursé)
