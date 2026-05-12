@@ -205,26 +205,22 @@ with tab2:
 with tab3:
     st.header("Dépenses Partagées")
             
-  # --- 1. FORMULAIRE D'AJOUT ---
+    # --- 1. FORMULAIRE D'AJOUT ---
     with st.form("add_frais", clear_on_submit=True):
         c1, c2 = st.columns(2)
         dfra = c1.date_input("Date")
         payeur = c2.selectbox("Payé par", [nom_p1, nom_p2])
         
-        # On utilise text_input pour contourner le bug américain de la virgule
+        # On utilise text_input pour que tu puisses taper la virgule sans bug
         montant_str = st.text_input("Montant (€) - Ex: 12,50", value="0")
         
         descf = st.text_input("Objet")
         if st.form_submit_button("Ajouter la dépense"):
-            # On remplace discrètement la virgule par un point
             montant_propre = montant_str.replace(',', '.')
             try:
-                # On transforme le texte en vrai nombre
                 montant = float(montant_propre)
             except ValueError:
-                # Sécurité : si on tape n'importe quoi (ex: des lettres), ça met 0
                 montant = 0.0
-                
             append_row("Frais", [str(dfra), payeur, montant, descf, False])
             st.rerun()
             
@@ -232,7 +228,26 @@ with tab3:
     st.markdown("### Détail des dépenses")
     st.info("💡 Cochez la case 'Remboursé' quand l'autre a payé sa moitié, puis enregistrez !")
     
-    edited_frais = st.data_editor(df_frais, num_rows="dynamic", use_container_width=True)
+    # NETTOYAGE : On s'assure que le tableau contient de vrais nombres AVANT de l'afficher
+    if not df_frais.empty:
+        df_frais['Montant (€)'] = df_frais['Montant (€)'].astype(str).str.replace(',', '.')
+        df_frais['Montant (€)'] = pd.to_numeric(df_frais['Montant (€)'], errors='coerce').fillna(0.0)
+    
+    # L'ASTUCE EST ICI : On configure la colonne pour forcer les 2 décimales
+    edited_frais = st.data_editor(
+        df_frais, 
+        num_rows="dynamic", 
+        use_container_width=True,
+        column_config={
+            "Montant (€)": st.column_config.NumberColumn(
+                "Montant (€)",
+                min_value=0.0,
+                step=0.01,
+                format="%.2f"
+            )
+        }
+    )
+    
     if st.button("Enregistrer les modifications de frais"):
         save_full_df("Frais", edited_frais)
         st.rerun()
@@ -242,10 +257,6 @@ with tab3:
     # --- 3. CALCUL DES COMPTES (NON-REMBOURSÉ UNIQUEMENT) ---
     st.markdown("### Bilan des comptes en cours")
     if not edited_frais.empty:
-        # Correction des virgules
-        edited_frais['Montant (€)'] = edited_frais['Montant (€)'].astype(str).str.replace(',', '.')
-        edited_frais['Montant (€)'] = pd.to_numeric(edited_frais['Montant (€)'], errors='coerce').fillna(0)
-        
         # On filtre pour ne garder que ce qui n'est PAS remboursé
         frais_a_payer = edited_frais[edited_frais['Remboursé'] == False]
         
