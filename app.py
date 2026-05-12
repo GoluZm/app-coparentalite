@@ -203,52 +203,96 @@ with tab2:
 # ONGLET 3 : FRAIS
 # ==========================================
 with tab3:
-    st.header("Dépenses Partagées")
-            
+    st.header("💰 Dépenses Partagées")
+
     # --- 1. FORMULAIRE D'AJOUT ---
-    with st.form("add_frais", clear_on_submit=True):
-        c1, c2 = st.columns(2)
-        dfra = c1.date_input("Date")
-        payeur = c2.selectbox("Payé par", [nom_p1, nom_p2])
-        
-        # On utilise text_input pour que tu puisses taper la virgule sans bug
-        montant_str = st.text_input("Montant (€) - Ex: 12,50", value="0")
-        
-        descf = st.text_input("Objet")
-        if st.form_submit_button("Ajouter la dépense"):
-            montant_propre = montant_str.replace(',', '.')
-            try:
-                montant = float(montant_propre)
-            except ValueError:
-                montant = 0.0
-            append_row("Frais", [str(dfra), payeur, montant, descf, False])
-            st.rerun()
+    with st.expander("➕ Ajouter une nouvelle dépense", expanded=True):
+        with st.form("add_frais", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            dfra = c1.date_input("Date")
+            payeur = c2.selectbox("Payé par", [nom_p1, nom_p2])
             
-   # --- 2. TABLEAU MODIFIABLE ---
-    st.markdown("### Détail des dépenses")
-    st.info("💡 Cochez la case 'Remboursé' quand l'autre a payé sa moitié, puis enregistrez !")
+            # On utilise le format texte infaillible pour la virgule
+            montant_str = st.text_input("Montant (€) - Ex: 12,50", value="")
+            descf = st.text_input("Objet (ex: Chaussures, Veste, Cantine...)")
+            
+            if st.form_submit_button("Ajouter la dépense"):
+                if montant_str and descf:
+                    montant_propre = montant_str.replace(',', '.')
+                    try:
+                        montant = float(montant_propre)
+                    except ValueError:
+                        montant = 0.0
+                    
+                    append_row("Frais", [str(dfra), payeur, montant, descf, False])
+                    st.rerun()
+                else:
+                    st.error("⚠️ N'oublie pas de mettre un montant et une description !")
+
+    st.markdown("---")
+
+    # --- 2. CALCUL DES COMPTES (BILAN) ---
+    st.subheader("⚖️ Bilan des comptes en cours")
     
-    # On s'assure que tout est bien un float (nombre à virgule) avant l'affichage
     if not df_frais.empty:
+        # Nettoyage des données pour que Python calcule sans erreur
         df_frais['Montant (€)'] = df_frais['Montant (€)'].astype(str).str.replace(',', '.')
         df_frais['Montant (€)'] = pd.to_numeric(df_frais['Montant (€)'], errors='coerce').fillna(0.0)
+        
+        # On sépare ce qui est remboursé de ce qui ne l'est pas
+        frais_a_payer = df_frais[df_frais['Remboursé'] == False]
+        
+        total_p1 = frais_a_payer[frais_a_payer['Payé par'] == nom_p1]['Montant (€)'].sum()
+        total_p2 = frais_a_payer[frais_a_payer['Payé par'] == nom_p2]['Montant (€)'].sum()
+        
+        col_b1, col_b2, col_b3 = st.columns(3)
+        col_b1.metric(f"Payé par {nom_p1}", f"{total_p1:.2f} €")
+        col_b2.metric(f"Payé par {nom_p2}", f"{total_p2:.2f} €")
+        
+        diff = total_p1 - total_p2
+        if diff > 0:
+            col_b3.warning(f"⚠️ {nom_p2} doit {diff / 2:.2f} € à {nom_p1}")
+        elif diff < 0:
+            col_b3.warning(f"⚠️ {nom_p1} doit {abs(diff) / 2:.2f} € à {nom_p2}")
+        else:
+            col_b3.success("✅ Comptes à l'équilibre !")
+    else:
+        st.info("Aucune dépense pour le moment.")
 
-    # Configuration de la colonne avec formatage européen forcé
-    edited_frais = st.data_editor(
-        df_frais, 
-        num_rows="dynamic", 
-        use_container_width=True,
-        column_config={
-            "Montant (€)": st.column_config.NumberColumn(
-                "Montant (€)",
-                min_value=0.0,
-                step=0.01,
-                # On utilise fr-FR locale-aware string formatting
-                format="%.2f" 
-            )
-        }
-    )
+    st.markdown("---")
+
+    # --- 3. LISTE ÉPURÉE DES DÉPENSES ---
+    st.subheader("📋 Détail des dépenses")
     
-    if st.button("Enregistrer les modifications de frais"):
-        save_full_df("Frais", edited_frais)
-        st.rerun()
+    if not df_frais.empty:
+        for index, row in df_frais.iterrows():
+            with st.container():
+                # On crée 4 colonnes invisibles pour aligner le texte proprement
+                col1, col2, col3, col4 = st.columns([1, 3, 1, 1])
+                
+                # S'il est remboursé, on barre le texte pour faire joli
+                barre = "~~" if row['Remboursé'] else "" 
+                
+                col1.write(f"📅 {row['Date']}")
+                col2.write(f"{barre}**{row['Description']}** (par {row['Payé par']}){barre}")
+                col3.write(f"{barre}**{float(row['Montant (€)']):.2f} €**{barre}")
+                
+                with col4:
+                    c_act1, c_act2 = st.columns(2)
+                    
+                    # Bouton Remboursé
+                    if not row['Remboursé']:
+                        if c_act1.button("✅", key=f"remb_{index}", help="Marquer comme remboursé"):
+                            df_frais.at[index, 'Remboursé'] = True
+                            save_full_df("Frais", df_frais)
+                            st.rerun()
+                    else:
+                        c_act1.write("✔️") # S'affiche quand c'est déjà réglé
+                        
+                    # Bouton Supprimer (Corbeille)
+                    if c_act2.button("🗑️", key=f"del_{index}", help="Supprimer en cas d'erreur"):
+                        df_frais = df_frais.drop(index)
+                        save_full_df("Frais", df_frais)
+                        st.rerun()
+                
+                st.divider() # Petite ligne grise de séparation entre chaque dépense
