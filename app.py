@@ -40,7 +40,8 @@ def save_full_df(sheet_name, df):
 
 def append_row(sheet_name, row_list):
     worksheet = sh.worksheet(sheet_name)
-    worksheet.append_row(row_list)
+    # Force Google Sheets à lire la donnée comme si tu la tapais à la main
+    worksheet.append_row(row_list, value_input_option="USER_ENTERED")
 
 # --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(page_title="App de garde Alternée", page_icon="👨‍👩‍👧", layout="centered")
@@ -197,8 +198,7 @@ with tab2:
     edited_act = st.data_editor(df_activites, num_rows="dynamic", use_container_width=True)
     if st.button("Enregistrer les modifications d'activités"):
         save_full_df("Activites", edited_act)
-        st.rerun()
-# ==========================================
+        st.rerun()# ==========================================
 # ONGLET 3 : FRAIS
 # ==========================================
 with tab3:
@@ -211,21 +211,17 @@ with tab3:
             dfra = c1.date_input("Date")
             payeur = c2.selectbox("Payé par", [nom_p1, nom_p2])
             
-            # Champ texte pour accepter la virgule ou le point sans broncher
+            # Champ texte libre pour ne plus jamais bloquer sur la virgule
             montant_str = st.text_input("Montant (€) - Ex: 12,50", value="")
             descf = st.text_input("Objet (ex: Chaussures, Veste, Cantine...)")
             
             if st.form_submit_button("Ajouter la dépense"):
                 if montant_str and descf:
-                    # LA SOLUTION DÉFINITIVE : On le transforme en VRAI nombre informatique (float)
-                    montant_propre = montant_str.replace(',', '.')
-                    try:
-                        montant_final = float(montant_propre)
-                    except ValueError:
-                        montant_final = 0.0
+                    # On force l'envoi d'une belle virgule française pour Google Sheets
+                    montant_pour_sheets = montant_str.replace('.', ',')
                     
-                    # On envoie montant_final (un vrai nombre) à Google Sheets, pas du texte !
-                    append_row("Frais", [str(dfra), payeur, montant_final, descf, False])
+                    # On envoie le texte, et l'option "USER_ENTERED" de l'Étape 1 s'occupe du reste !
+                    append_row("Frais", [str(dfra), payeur, montant_pour_sheets, descf, False])
                     st.rerun()
                 else:
                     st.error("⚠️ N'oublie pas de mettre un montant et une description !")
@@ -236,7 +232,7 @@ with tab3:
     st.subheader("⚖️ Bilan des comptes en cours")
     
     if not df_frais.empty:
-        # Nettoyage
+        # Nettoyage invisible pour que le calcul mathématique reste juste
         df_frais['Montant (€)'] = df_frais['Montant (€)'].astype(str).str.replace(',', '.')
         df_frais['Montant (€)'] = pd.to_numeric(df_frais['Montant (€)'], errors='coerce').fillna(0.0)
         
