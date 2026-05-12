@@ -44,7 +44,7 @@ def append_row(sheet_name, row_list):
 
 # --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(page_title="App de garde Alternée", page_icon="👨‍👩‍👧", layout="centered")
-st.title("👨‍👩‍👧 Tableau de bord partagé")
+st.title("👨‍👩‍👧 Agenda pour un avenir serein")
 
 # --- PARAMÈTRES (SIDEBAR) ---
 st.sidebar.header("⚙️ Paramètres")
@@ -70,11 +70,14 @@ if sh:
     if df_activites.empty or 'Date Début' not in df_activites.columns: 
         df_activites = pd.DataFrame(columns=["Date Début", "Date Fin", "Type", "Description", "Parent en charge"])
         
-    df_frais = get_data("Frais")
+   df_frais = get_data("Frais")
     if df_frais.empty or 'Date' not in df_frais.columns: 
-        df_frais = pd.DataFrame(columns=["Date", "Payé par", "Montant (€)", "Description"])
-else:
-    st.stop() # On arrête si la connexion échoue
+        df_frais = pd.DataFrame(columns=["Date", "Payé par", "Montant (€)", "Description", "Remboursé"])
+    else:
+        if "Remboursé" not in df_frais.columns:
+            df_frais["Remboursé"] = False
+        else:
+            df_frais["Remboursé"] = df_frais["Remboursé"].astype(str).str.upper() == "TRUE"    st.stop() # On arrête si la connexion échoue
 
 # --- ONGLETS ---
 tab1, tab2, tab3 = st.tabs(["📅 Garde & Notes", "⚽ Activités", "💰 Frais"])
@@ -197,27 +200,49 @@ with tab2:
 # ==========================================
 # ONGLET 3 : FRAIS
 # ==========================================
-# ==========================================
-# ONGLET 3 : FRAIS
-# ==========================================
 with tab3:
     st.header("Dépenses Partagées")
+            
+    # --- 1. FORMULAIRE D'AJOUT ---
+    with st.form("add_frais", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        dfra = c1.date_input("Date")
+        payeur = c2.selectbox("Payé par", [nom_p1, nom_p2])
+        montant = st.number_input("Montant (€)", min_value=0.0, step=0.01, format="%.2f")
+        descf = st.text_input("Objet")
+        if st.form_submit_button("Ajouter la dépense"):
+            # On ajoute False par défaut (non remboursé)
+            append_row("Frais", [str(dfra), payeur, montant, descf, False])
+            st.rerun()
+            
+    # --- 2. TABLEAU MODIFIABLE ---
+    st.markdown("### Détail des dépenses")
+    st.info("💡 Cochez la case 'Remboursé' quand l'autre a payé sa moitié, puis enregistrez !")
     
-    # --- CALCUL DES COMPTES (NOUVEAU) ---
-    if not df_frais.empty:
-        # On force la conversion en nombres pour éviter les bugs de calcul
-        df_frais['Montant (€)'] = pd.to_numeric(df_frais['Montant (€)'], errors='coerce').fillna(0)
+    edited_frais = st.data_editor(df_frais, num_rows="dynamic", use_container_width=True)
+    if st.button("Enregistrer les modifications de frais"):
+        save_full_df("Frais", edited_frais)
+        st.rerun()
+
+    st.markdown("---")
+
+    # --- 3. CALCUL DES COMPTES (NON-REMBOURSÉ UNIQUEMENT) ---
+    st.markdown("### Bilan des comptes en cours")
+    if not edited_frais.empty:
+        # Correction des virgules
+        edited_frais['Montant (€)'] = edited_frais['Montant (€)'].astype(str).str.replace(',', '.')
+        edited_frais['Montant (€)'] = pd.to_numeric(edited_frais['Montant (€)'], errors='coerce').fillna(0)
         
-        # On calcule les totaux
-        total_p1 = df_frais[df_frais['Payé par'] == nom_p1]['Montant (€)'].sum()
-        total_p2 = df_frais[df_frais['Payé par'] == nom_p2]['Montant (€)'].sum()
+        # On filtre pour ne garder que ce qui n'est PAS remboursé
+        frais_a_payer = edited_frais[edited_frais['Remboursé'] == False]
         
-        # On affiche les compteurs
+        total_p1 = frais_a_payer[frais_a_payer['Payé par'] == nom_p1]['Montant (€)'].sum()
+        total_p2 = frais_a_payer[frais_a_payer['Payé par'] == nom_p2]['Montant (€)'].sum()
+        
         col_bilan1, col_bilan2, col_bilan3 = st.columns(3)
         col_bilan1.metric(f"Total {nom_p1}", f"{total_p1:.2f} €")
         col_bilan2.metric(f"Total {nom_p2}", f"{total_p2:.2f} €")
         
-        # On calcule qui doit quoi à qui
         diff = total_p1 - total_p2
         if diff > 0:
             col_bilan3.warning(f"⚠️ {nom_p2} doit {diff / 2:.2f} € à {nom_p1}")
@@ -225,22 +250,3 @@ with tab3:
             col_bilan3.warning(f"⚠️ {nom_p1} doit {abs(diff) / 2:.2f} € à {nom_p2}")
         else:
             col_bilan3.success("✅ Comptes à l'équilibre !")
-            
-        st.markdown("---") # Petite ligne de séparation
-        
-    # --- FORMULAIRE D'AJOUT ---
-    with st.form("add_frais", clear_on_submit=True):
-        c1, c2 = st.columns(2)
-        dfra = c1.date_input("Date")
-        payeur = c2.selectbox("Payé par", [nom_p1, nom_p2])
-        montant = st.number_input("Montant (€)", min_value=0.0)
-        descf = st.text_input("Objet")
-        if st.form_submit_button("Ajouter la dépense"):
-            append_row("Frais", [str(dfra), payeur, montant, descf])
-            st.rerun()
-            
-    # --- TABLEAU MODIFIABLE ---
-    edited_frais = st.data_editor(df_frais, num_rows="dynamic", use_container_width=True)
-    if st.button("Enregistrer les modifications de frais"):
-        save_full_df("Frais", edited_frais)
-        st.rerun()
