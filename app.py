@@ -216,12 +216,12 @@ with tab3:
             montant_str = st.text_input("Montant (€) - Ex: 12,50", value="")
             descf = st.text_input("Objet (ex: Chaussures, Veste, Cantine...)")
             
-           if st.form_submit_button("Ajouter la dépense"):
+            if st.form_submit_button("Ajouter la dépense"):
                 if montant_str and descf:
                     # On force l'envoi d'une virgule à Google Sheets pour éviter le bug des milliers
-                   montant_pour_sheets = montant_str.replace('.', ',')
+                    montant_pour_sheets = montant_str.replace('.', ',')
                     
-                   append_row("Frais", [str(dfra), payeur, montant_pour_sheets, descf, False])
+                    append_row("Frais", [str(dfra), payeur, montant_pour_sheets, descf, False])
                     st.rerun()
                 else:
                     st.error("⚠️ N'oublie pas de mettre un montant et une description !")
