@@ -205,15 +205,26 @@ with tab2:
 with tab3:
     st.header("Dépenses Partagées")
             
-    # --- 1. FORMULAIRE D'AJOUT ---
+  # --- 1. FORMULAIRE D'AJOUT ---
     with st.form("add_frais", clear_on_submit=True):
         c1, c2 = st.columns(2)
         dfra = c1.date_input("Date")
         payeur = c2.selectbox("Payé par", [nom_p1, nom_p2])
-        montant = st.number_input("Montant (€)", min_value=0.0, step=0.01, format="%.2")
+        
+        # On utilise text_input pour contourner le bug américain de la virgule
+        montant_str = st.text_input("Montant (€) - Ex: 12,50", value="0")
+        
         descf = st.text_input("Objet")
         if st.form_submit_button("Ajouter la dépense"):
-            # On ajoute False par défaut (non remboursé)
+            # On remplace discrètement la virgule par un point
+            montant_propre = montant_str.replace(',', '.')
+            try:
+                # On transforme le texte en vrai nombre
+                montant = float(montant_propre)
+            except ValueError:
+                # Sécurité : si on tape n'importe quoi (ex: des lettres), ça met 0
+                montant = 0.0
+                
             append_row("Frais", [str(dfra), payeur, montant, descf, False])
             st.rerun()
             
