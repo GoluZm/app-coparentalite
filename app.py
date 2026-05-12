@@ -228,26 +228,25 @@ with tab3:
     st.markdown("### Détail des dépenses")
     st.info("💡 Cochez la case 'Remboursé' quand l'autre a payé sa moitié, puis enregistrez !")
     
-    # NETTOYAGE : On s'assure que le tableau contient de vrais nombres AVANT de l'afficher
+    # L'ASTUCE ANTI-BUG : On transforme la colonne en texte pour empêcher Streamlit d'effacer la virgule !
     if not df_frais.empty:
-        df_frais['Montant (€)'] = df_frais['Montant (€)'].astype(str).str.replace(',', '.')
-        df_frais['Montant (€)'] = pd.to_numeric(df_frais['Montant (€)'], errors='coerce').fillna(0.0)
+        df_frais['Montant (€)'] = df_frais['Montant (€)'].astype(str)
     
-    # L'ASTUCE EST ICI : On configure la colonne pour forcer les 2 décimales
+    # On force la colonne à agir comme du texte simple
     edited_frais = st.data_editor(
         df_frais, 
         num_rows="dynamic", 
         use_container_width=True,
         column_config={
-            "Montant (€)": st.column_config.NumberColumn(
-                "Montant (€)",
-                min_value=0.0,
-                step=0.01,
-                format="%.2f"
-            )
+            "Montant (€)": st.column_config.TextColumn("Montant (€)")
         }
     )
     
+    # RE-TRANSFORMATION EN NOMBRE POUR LES CALCULS ET LA SAUVEGARDE
+    if not edited_frais.empty:
+        edited_frais['Montant (€)'] = edited_frais['Montant (€)'].astype(str).str.replace(',', '.')
+        edited_frais['Montant (€)'] = pd.to_numeric(edited_frais['Montant (€)'], errors='coerce').fillna(0.0)
+        
     if st.button("Enregistrer les modifications de frais"):
         save_full_df("Frais", edited_frais)
         st.rerun()
