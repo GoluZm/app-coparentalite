@@ -204,23 +204,32 @@ with tab2:
 # ONGLET 3 : FRAIS
 # ==========================================
 with tab3:
-    st.header("💰 Dépenses Partagées")
+    st.header("💰 Dépenses et Remboursements")
 
     # --- 1. FORMULAIRE D'AJOUT ---
-    with st.expander("➕ Ajouter une nouvelle dépense", expanded=True):
+    with st.expander("➕ Ajouter une opération (Dépense ou Remboursement)", expanded=True):
         with st.form("add_frais", clear_on_submit=True):
+            
+            # LE NOUVEAU BOUTON MAGIQUE
+            type_op = st.radio("Type d'opération :", ["🔴 Dépense (J'ai payé)", "🟢 Remboursement (J'ai reçu de l'argent)"], horizontal=True)
+            
             c1, c2 = st.columns(2)
             dfra = c1.date_input("Date")
-            payeur = c2.selectbox("Payé par", [nom_p1, nom_p2])
+            payeur = c2.selectbox("Payé / Reçu par :", [nom_p1, nom_p2])
             
-            # Champ texte libre
             montant_str = st.text_input("Montant (€) - Ex: 12,50", value="")
-            descf = st.text_input("Objet (ex: Chaussures, Veste, Cantine...)")
+            descf = st.text_input("Objet (ex: Chaussures, Mutuelle, Garderie...)")
             
-            if st.form_submit_button("Ajouter la dépense"):
+            if st.form_submit_button("Enregistrer l'opération"):
                 if montant_str and descf:
-                    # On envoie tel quel avec la virgule pour Sheets
+                    # On prépare la virgule pour Google Sheets
                     montant_pour_sheets = montant_str.replace('.', ',')
+                    
+                    # SI c'est un remboursement, on glisse un "Moins" devant le chiffre en cachette !
+                    if "🟢" in type_op:
+                        # On s'assure qu'il y a un seul signe moins
+                        montant_pour_sheets = "-" + montant_pour_sheets.replace('-', '')
+                        
                     append_row("Frais", [str(dfra), payeur, montant_pour_sheets, descf, False])
                     st.rerun()
                 else:
@@ -232,19 +241,13 @@ with tab3:
     st.subheader("⚖️ Bilan des comptes en cours")
     
     if not df_frais.empty:
-        # L'armure anti-bug pour les colonnes
         df_frais.columns = df_frais.columns.str.strip()
         
-        # NETTOYAGE EXTRÊME :
-        # 1. On transforme en texte et on remplace la virgule par un point
+        # Nettoyage
         df_frais['Montant (€)'] = df_frais['Montant (€)'].astype(str).str.replace(',', '.')
-        
-        # 2. LA GOMME : On retire le "€", les espaces, et les espaces invisibles de Google
         df_frais['Montant (€)'] = df_frais['Montant (€)'].str.replace('€', '', regex=False)
         df_frais['Montant (€)'] = df_frais['Montant (€)'].str.replace(' ', '', regex=False)
         df_frais['Montant (€)'] = df_frais['Montant (€)'].str.replace('\xa0', '', regex=False)
-        
-        # 3. On transforme en vrai nombre mathématique (les erreurs deviennent 0.0)
         df_frais['Montant (€)'] = pd.to_numeric(df_frais['Montant (€)'], errors='coerce').fillna(0.0)
         
         frais_a_payer = df_frais[df_frais['Remboursé'] == False]
@@ -253,8 +256,8 @@ with tab3:
         total_p2 = frais_a_payer[frais_a_payer['Payé par'] == nom_p2]['Montant (€)'].sum()
         
         col_b1, col_b2, col_b3 = st.columns(3)
-        col_b1.metric(f"Payé par {nom_p1}", f"{total_p1:.2f} €")
-        col_b2.metric(f"Payé par {nom_p2}", f"{total_p2:.2f} €")
+        col_b1.metric(f"Balance {nom_p1}", f"{total_p1:.2f} €")
+        col_b2.metric(f"Balance {nom_p2}", f"{total_p2:.2f} €")
         
         diff = total_p1 - total_p2
         if diff > 0:
@@ -264,12 +267,12 @@ with tab3:
         else:
             col_b3.success("✅ Comptes à l'équilibre !")
     else:
-        st.info("Aucune dépense pour le moment.")
+        st.info("Aucune opération en cours.")
 
     st.markdown("---")
 
-    # --- 3. LISTE ÉPURÉE DES DÉPENSES ---
-    st.subheader("📋 Détail des dépenses")
+    # --- 3. LISTE ÉPURÉE ---
+    st.subheader("📋 Détail des opérations")
     
     if not df_frais.empty:
         for index, row in df_frais.iterrows():
@@ -277,23 +280,32 @@ with tab3:
                 col1, col2, col3, col4 = st.columns([1, 3, 1, 1])
                 
                 barre = "~~" if row['Remboursé'] else "" 
+                montant_float = float(row['Montant (€)'])
+                
+                # On change le style selon si c'est une dépense ou un remboursement
+                if montant_float < 0:
+                    affichage_prix = f"🟢 **+{abs(montant_float):.2f} €**"
+                    action_texte = "reçu par"
+                else:
+                    affichage_prix = f"🔴 **-{montant_float:.2f} €**"
+                    action_texte = "payé par"
                 
                 col1.write(f"📅 {row['Date']}")
-                col2.write(f"{barre}**{row['Description']}** (par {row['Payé par']}){barre}")
-                col3.write(f"{barre}**{float(row['Montant (€)']):.2f} €**{barre}")
+                col2.write(f"{barre}**{row['Description']}** ({action_texte} {row['Payé par']}){barre}")
+                col3.write(f"{barre}{affichage_prix}{barre}")
                 
                 with col4:
                     c_act1, c_act2 = st.columns(2)
                     
                     if not row['Remboursé']:
-                        if c_act1.button("✅", key=f"remb_{index}", help="Marquer comme remboursé"):
+                        if c_act1.button("✅", key=f"remb_{index}", help="Marquer comme réglé"):
                             df_frais.at[index, 'Remboursé'] = True
                             save_full_df("Frais", df_frais)
                             st.rerun()
                     else:
                         c_act1.write("✔️") 
                         
-                    if c_act2.button("🗑️", key=f"del_{index}", help="Supprimer en cas d'erreur"):
+                    if c_act2.button("🗑️", key=f"del_{index}", help="Supprimer l'erreur"):
                         df_frais = df_frais.drop(index)
                         save_full_df("Frais", df_frais)
                         st.rerun()
