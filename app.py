@@ -224,52 +224,31 @@ with tab3:
             append_row("Frais", [str(dfra), payeur, montant, descf, False])
             st.rerun()
             
-    # --- 2. TABLEAU MODIFIABLE ---
+   # --- 2. TABLEAU MODIFIABLE ---
     st.markdown("### Détail des dépenses")
     st.info("💡 Cochez la case 'Remboursé' quand l'autre a payé sa moitié, puis enregistrez !")
     
-    # L'ASTUCE ANTI-BUG : On transforme la colonne en texte pour empêcher Streamlit d'effacer la virgule !
+    # On s'assure que tout est bien un float (nombre à virgule) avant l'affichage
     if not df_frais.empty:
-        df_frais['Montant (€)'] = df_frais['Montant (€)'].astype(str)
-    
-    # On force la colonne à agir comme du texte simple
+        df_frais['Montant (€)'] = df_frais['Montant (€)'].astype(str).str.replace(',', '.')
+        df_frais['Montant (€)'] = pd.to_numeric(df_frais['Montant (€)'], errors='coerce').fillna(0.0)
+
+    # Configuration de la colonne avec formatage européen forcé
     edited_frais = st.data_editor(
         df_frais, 
         num_rows="dynamic", 
         use_container_width=True,
         column_config={
-            "Montant (€)": st.column_config.TextColumn("Montant (€)")
+            "Montant (€)": st.column_config.NumberColumn(
+                "Montant (€)",
+                min_value=0.0,
+                step=0.01,
+                # On utilise fr-FR locale-aware string formatting
+                format="%.2f" 
+            )
         }
     )
     
-    # RE-TRANSFORMATION EN NOMBRE POUR LES CALCULS ET LA SAUVEGARDE
-    if not edited_frais.empty:
-        edited_frais['Montant (€)'] = edited_frais['Montant (€)'].astype(str).str.replace(',', '.')
-        edited_frais['Montant (€)'] = pd.to_numeric(edited_frais['Montant (€)'], errors='coerce').fillna(0.0)
-        
     if st.button("Enregistrer les modifications de frais"):
         save_full_df("Frais", edited_frais)
         st.rerun()
-
-    st.markdown("---")
-
-    # --- 3. CALCUL DES COMPTES (NON-REMBOURSÉ UNIQUEMENT) ---
-    st.markdown("### Bilan des comptes en cours")
-    if not edited_frais.empty:
-        # On filtre pour ne garder que ce qui n'est PAS remboursé
-        frais_a_payer = edited_frais[edited_frais['Remboursé'] == False]
-        
-        total_p1 = frais_a_payer[frais_a_payer['Payé par'] == nom_p1]['Montant (€)'].sum()
-        total_p2 = frais_a_payer[frais_a_payer['Payé par'] == nom_p2]['Montant (€)'].sum()
-        
-        col_bilan1, col_bilan2, col_bilan3 = st.columns(3)
-        col_bilan1.metric(f"Total {nom_p1}", f"{total_p1:.2f} €")
-        col_bilan2.metric(f"Total {nom_p2}", f"{total_p2:.2f} €")
-        
-        diff = total_p1 - total_p2
-        if diff > 0:
-            col_bilan3.warning(f"⚠️ {nom_p2} doit {diff / 2:.2f} € à {nom_p1}")
-        elif diff < 0:
-            col_bilan3.warning(f"⚠️ {nom_p1} doit {abs(diff) / 2:.2f} € à {nom_p2}")
-        else:
-            col_bilan3.success("✅ Comptes à l'équilibre !")
