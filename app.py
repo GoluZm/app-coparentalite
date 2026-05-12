@@ -198,7 +198,6 @@ with tab2:
     if st.button("Enregistrer les modifications d'activités"):
         save_full_df("Activites", edited_act)
         st.rerun()
-
 # ==========================================
 # ONGLET 3 : FRAIS
 # ==========================================
@@ -212,16 +211,21 @@ with tab3:
             dfra = c1.date_input("Date")
             payeur = c2.selectbox("Payé par", [nom_p1, nom_p2])
             
-            # On utilise le format texte infaillible pour la virgule
+            # Champ texte pour accepter la virgule ou le point sans broncher
             montant_str = st.text_input("Montant (€) - Ex: 12,50", value="")
             descf = st.text_input("Objet (ex: Chaussures, Veste, Cantine...)")
             
             if st.form_submit_button("Ajouter la dépense"):
                 if montant_str and descf:
-                    # On force l'envoi d'une virgule à Google Sheets pour éviter le bug des milliers
-                    montant_pour_sheets = montant_str.replace('.', ',')
+                    # LA SOLUTION DÉFINITIVE : On le transforme en VRAI nombre informatique (float)
+                    montant_propre = montant_str.replace(',', '.')
+                    try:
+                        montant_final = float(montant_propre)
+                    except ValueError:
+                        montant_final = 0.0
                     
-                    append_row("Frais", [str(dfra), payeur, montant_pour_sheets, descf, False])
+                    # On envoie montant_final (un vrai nombre) à Google Sheets, pas du texte !
+                    append_row("Frais", [str(dfra), payeur, montant_final, descf, False])
                     st.rerun()
                 else:
                     st.error("⚠️ N'oublie pas de mettre un montant et une description !")
@@ -232,11 +236,10 @@ with tab3:
     st.subheader("⚖️ Bilan des comptes en cours")
     
     if not df_frais.empty:
-        # Nettoyage des données pour que Python calcule sans erreur
+        # Nettoyage
         df_frais['Montant (€)'] = df_frais['Montant (€)'].astype(str).str.replace(',', '.')
         df_frais['Montant (€)'] = pd.to_numeric(df_frais['Montant (€)'], errors='coerce').fillna(0.0)
         
-        # On sépare ce qui est remboursé de ce qui ne l'est pas
         frais_a_payer = df_frais[df_frais['Remboursé'] == False]
         
         total_p1 = frais_a_payer[frais_a_payer['Payé par'] == nom_p1]['Montant (€)'].sum()
@@ -264,10 +267,8 @@ with tab3:
     if not df_frais.empty:
         for index, row in df_frais.iterrows():
             with st.container():
-                # On crée 4 colonnes invisibles pour aligner le texte proprement
                 col1, col2, col3, col4 = st.columns([1, 3, 1, 1])
                 
-                # S'il est remboursé, on barre le texte pour faire joli
                 barre = "~~" if row['Remboursé'] else "" 
                 
                 col1.write(f"📅 {row['Date']}")
@@ -277,19 +278,17 @@ with tab3:
                 with col4:
                     c_act1, c_act2 = st.columns(2)
                     
-                    # Bouton Remboursé
                     if not row['Remboursé']:
                         if c_act1.button("✅", key=f"remb_{index}", help="Marquer comme remboursé"):
                             df_frais.at[index, 'Remboursé'] = True
                             save_full_df("Frais", df_frais)
                             st.rerun()
                     else:
-                        c_act1.write("✔️") # S'affiche quand c'est déjà réglé
+                        c_act1.write("✔️") 
                         
-                    # Bouton Supprimer (Corbeille)
                     if c_act2.button("🗑️", key=f"del_{index}", help="Supprimer en cas d'erreur"):
                         df_frais = df_frais.drop(index)
                         save_full_df("Frais", df_frais)
                         st.rerun()
                 
-                st.divider() # Petite ligne grise de séparation entre chaque dépense
+                st.divider()
