@@ -70,14 +70,16 @@ if sh:
     if df_activites.empty or 'Date Début' not in df_activites.columns: 
         df_activites = pd.DataFrame(columns=["Date Début", "Date Fin", "Type", "Description", "Parent en charge"])
         
-   df_frais = get_data("Frais")
+    df_frais = get_data("Frais")
     if df_frais.empty or 'Date' not in df_frais.columns: 
         df_frais = pd.DataFrame(columns=["Date", "Payé par", "Montant (€)", "Description", "Remboursé"])
     else:
         if "Remboursé" not in df_frais.columns:
             df_frais["Remboursé"] = False
         else:
-            df_frais["Remboursé"] = df_frais["Remboursé"].astype(str).str.upper() == "TRUE"    st.stop() # On arrête si la connexion échoue
+            df_frais["Remboursé"] = df_frais["Remboursé"].astype(str).str.upper() == "TRUE"
+else:
+    st.stop() # On arrête si la connexion échoue # On arrête si la connexion échoue
 
 # --- ONGLETS ---
 tab1, tab2, tab3 = st.tabs(["📅 Garde & Notes", "⚽ Activités", "💰 Frais"])
