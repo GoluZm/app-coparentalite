@@ -198,7 +198,9 @@ with tab2:
     edited_act = st.data_editor(df_activites, num_rows="dynamic", use_container_width=True)
     if st.button("Enregistrer les modifications d'activités"):
         save_full_df("Activites", edited_act)
-        st.rerun()# ==========================================
+        st.rerun()
+        
+# ==========================================
 # ONGLET 3 : FRAIS
 # ==========================================
 with tab3:
@@ -211,16 +213,14 @@ with tab3:
             dfra = c1.date_input("Date")
             payeur = c2.selectbox("Payé par", [nom_p1, nom_p2])
             
-            # Champ texte libre pour ne plus jamais bloquer sur la virgule
+            # Champ texte libre
             montant_str = st.text_input("Montant (€) - Ex: 12,50", value="")
             descf = st.text_input("Objet (ex: Chaussures, Veste, Cantine...)")
             
             if st.form_submit_button("Ajouter la dépense"):
                 if montant_str and descf:
-                    # On force l'envoi d'une belle virgule française pour Google Sheets
+                    # On envoie tel quel avec la virgule pour Sheets
                     montant_pour_sheets = montant_str.replace('.', ',')
-                    
-                    # On envoie le texte, et l'option "USER_ENTERED" de l'Étape 1 s'occupe du reste !
                     append_row("Frais", [str(dfra), payeur, montant_pour_sheets, descf, False])
                     st.rerun()
                 else:
@@ -232,8 +232,19 @@ with tab3:
     st.subheader("⚖️ Bilan des comptes en cours")
     
     if not df_frais.empty:
-        # Nettoyage invisible pour que le calcul mathématique reste juste
+        # L'armure anti-bug pour les colonnes
+        df_frais.columns = df_frais.columns.str.strip()
+        
+        # NETTOYAGE EXTRÊME :
+        # 1. On transforme en texte et on remplace la virgule par un point
         df_frais['Montant (€)'] = df_frais['Montant (€)'].astype(str).str.replace(',', '.')
+        
+        # 2. LA GOMME : On retire le "€", les espaces, et les espaces invisibles de Google
+        df_frais['Montant (€)'] = df_frais['Montant (€)'].str.replace('€', '', regex=False)
+        df_frais['Montant (€)'] = df_frais['Montant (€)'].str.replace(' ', '', regex=False)
+        df_frais['Montant (€)'] = df_frais['Montant (€)'].str.replace('\xa0', '', regex=False)
+        
+        # 3. On transforme en vrai nombre mathématique (les erreurs deviennent 0.0)
         df_frais['Montant (€)'] = pd.to_numeric(df_frais['Montant (€)'], errors='coerce').fillna(0.0)
         
         frais_a_payer = df_frais[df_frais['Remboursé'] == False]
