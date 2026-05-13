@@ -209,7 +209,6 @@ with tab3:
     # --- 1. FORMULAIRE D'AJOUT ---
     with st.expander("➕ Ajouter une opération", expanded=True):
         with st.form("add_frais", clear_on_submit=True):
-            # LE NOUVEAU BOUTON À 3 OPTIONS !
             type_op = st.radio("Type d'opération :", [
                 "🔴 Dépense (Achat commun)", 
                 "🟢 Rentrée d'argent (Garderie, mutuelle...)",
@@ -218,10 +217,10 @@ with tab3:
             
             c1, c2 = st.columns(2)
             dfra = c1.date_input("Date")
-            payeur = c2.selectbox("Payé / Envoyé par :", [nom_p1, nom_p2])
+            payeur = c2.selectbox("Payé / Reçu par :", [nom_p1, nom_p2])
             
             montant_str = st.text_input("Montant (€) - Ex: 12,50", value="")
-            descf = st.text_input("Objet (ex: Chaussures, Virement de Papa, etc.)")
+            descf = st.text_input("Objet (ex: Chaussures, Virement...)")
             
             if st.form_submit_button("Enregistrer l'opération"):
                 if montant_str and descf:
@@ -230,7 +229,6 @@ with tab3:
                     if "🟢" in type_op:
                         montant_pour_sheets = "-" + montant_pour_sheets.replace('-', '')
                     elif "🔄" in type_op:
-                        # On glisse un mot-clé secret pour que l'ordi reconnaisse le virement
                         descf = f"🔄 VIREMENT : {descf}"
                         
                     append_row("Frais", [str(dfra), payeur, montant_pour_sheets, descf, False])
@@ -249,9 +247,16 @@ with tab3:
     if not df_frais.empty:
         df_frais.columns = df_frais.columns.str.strip()
         
+        # 🛡️ LA SUPER GOMME (Spéciale nombres négatifs et comptabilité)
         def clean_price(val):
             v = str(val).replace(',', '.')
+            # Si Sheets utilise le format comptable avec parenthèses ex: (25.00)
+            if '(' in v and ')' in v:
+                v = '-' + v.replace('(', '').replace(')', '')
+            # On retire l'euro et les espaces
             v = v.replace('€', '').replace(' ', '').replace('\xa0', '')
+            # On force le VRAI signe moins informatique (corrige les tirets bizarres)
+            v = v.replace('−', '-').replace('—', '-')
             try:
                 return float(v)
             except:
@@ -267,16 +272,14 @@ with tab3:
             est_rembourse = row['Remboursé']
             description = str(row['Description'])
             
-            # 🧮 CALCUL DES DETTES INTÉGRÉ
+            # 🧮 CALCUL DES DETTES
             if not est_rembourse:
                 if "🔄 VIREMENT" in description:
-                    # Règle d'or : Un virement compte à 100% ! Pas de division par 2.
                     if payeur_nom == nom_p1:
                         total_du_p2 += abs(montant_total)
                     else:
                         total_du_p1 += abs(montant_total)
                 else:
-                    # Achat ou rentrée normale (division par 2)
                     if montant_total > 0: 
                         if payeur_nom == nom_p1:
                             total_du_p2 += moitie
@@ -296,7 +299,6 @@ with tab3:
                 
                 col1.write(f"📅 {row['Date']}")
                 
-                # On cache le mot-clé secret pour que ce soit joli à l'écran
                 desc_propre = description.replace("🔄 VIREMENT : ", "")
                 col2.write(f"{barre}**{desc_propre}**{barre}")
                 
@@ -313,7 +315,6 @@ with tab3:
                     c_act1, c_act2 = st.columns(2)
                     
                     if not est_rembourse:
-                        # Bouton spécial pour valider la réception du virement
                         if "🔄 VIREMENT" in description:
                             bouton_titre = "🤝"
                             help_txt = "Valider la bonne réception de ce virement"
@@ -357,4 +358,4 @@ with tab3:
         if total_du_p1 == 0 and total_du_p2 == 0:
             col_sb3.success("✅ Comptes parfaits, aucun parent ne doit rien !")
         else:
-            col_sb3.success("✅ Les comptes sont à l'équilibre parfait ! (0 € à verser)")
+            col_sb3.success("✅ Les comptes sont à l'équilibre parfait ! (0 € à verser)")r)")
