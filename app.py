@@ -358,4 +358,4 @@ with tab3:
         if total_du_p1 == 0 and total_du_p2 == 0:
             col_sb3.success("✅ Comptes parfaits, aucun parent ne doit rien !")
         else:
-            col_sb3.success("✅ Les comptes sont à l'équilibre parfait ! (0 € à verser)"))")
+            col_sb3.success("✅ Les comptes sont à l'équilibre parfait ! (0 € à verser)")
