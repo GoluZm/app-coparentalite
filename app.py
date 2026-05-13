@@ -207,10 +207,8 @@ with tab3:
     st.header("💰 Dépenses et Remboursements")
 
     # --- 1. FORMULAIRE D'AJOUT ---
-    with st.expander("➕ Ajouter une opération (Dépense ou Remboursement)", expanded=True):
+    with st.expander("➕ Ajouter une opération", expanded=True):
         with st.form("add_frais", clear_on_submit=True):
-            
-            # LE NOUVEAU BOUTON MAGIQUE
             type_op = st.radio("Type d'opération :", ["🔴 Dépense (J'ai payé)", "🟢 Remboursement (J'ai reçu de l'argent)"], horizontal=True)
             
             c1, c2 = st.columns(2)
@@ -225,9 +223,8 @@ with tab3:
                     # On prépare la virgule pour Google Sheets
                     montant_pour_sheets = montant_str.replace('.', ',')
                     
-                    # SI c'est un remboursement, on glisse un "Moins" devant le chiffre en cachette !
+                    # Si c'est un remboursement, on met le chiffre en négatif
                     if "🟢" in type_op:
-                        # On s'assure qu'il y a un seul signe moins
                         montant_pour_sheets = "-" + montant_pour_sheets.replace('-', '')
                         
                     append_row("Frais", [str(dfra), payeur, montant_pour_sheets, descf, False])
@@ -237,77 +234,103 @@ with tab3:
 
     st.markdown("---")
 
-    # --- 2. CALCUL DES COMPTES (BILAN) ---
-    st.subheader("⚖️ Bilan des comptes en cours")
+    # --- 2. LISTE DÉTAILLÉE PAR OPÉRATION ---
+    st.subheader("📋 Détail des opérations")
+    
+    # Initialisation des compteurs pour le Super Bilan
+    total_du_p1 = 0.0 # Ce que le Parent 1 doit au Parent 2
+    total_du_p2 = 0.0 # Ce que le Parent 2 doit au Parent 1
     
     if not df_frais.empty:
         df_frais.columns = df_frais.columns.str.strip()
         
-        # Nettoyage
-        df_frais['Montant (€)'] = df_frais['Montant (€)'].astype(str).str.replace(',', '.')
-        df_frais['Montant (€)'] = df_frais['Montant (€)'].str.replace('€', '', regex=False)
-        df_frais['Montant (€)'] = df_frais['Montant (€)'].str.replace(' ', '', regex=False)
-        df_frais['Montant (€)'] = df_frais['Montant (€)'].str.replace('\xa0', '', regex=False)
-        df_frais['Montant (€)'] = pd.to_numeric(df_frais['Montant (€)'], errors='coerce').fillna(0.0)
-        
-        frais_a_payer = df_frais[df_frais['Remboursé'] == False]
-        
-        total_p1 = frais_a_payer[frais_a_payer['Payé par'] == nom_p1]['Montant (€)'].sum()
-        total_p2 = frais_a_payer[frais_a_payer['Payé par'] == nom_p2]['Montant (€)'].sum()
-        
-        col_b1, col_b2, col_b3 = st.columns(3)
-        col_b1.metric(f"Balance {nom_p1}", f"{total_p1:.2f} €")
-        col_b2.metric(f"Balance {nom_p2}", f"{total_p2:.2f} €")
-        
-        diff = total_p1 - total_p2
-        if diff > 0:
-            col_b3.warning(f"⚠️ {nom_p2} doit {diff / 2:.2f} € à {nom_p1}")
-        elif diff < 0:
-            col_b3.warning(f"⚠️ {nom_p1} doit {abs(diff) / 2:.2f} € à {nom_p2}")
-        else:
-            col_b3.success("✅ Comptes à l'équilibre !")
-    else:
-        st.info("Aucune opération en cours.")
+        # NETTOYAGE SÉCURISÉ (qui garde le signe moins)
+        def clean_price(val):
+            v = str(val).replace(',', '.')
+            v = v.replace('€', '').replace(' ', '').replace('\xa0', '')
+            try:
+                return float(v)
+            except:
+                return 0.0
 
-    st.markdown("---")
-
-    # --- 3. LISTE ÉPURÉE ---
-    st.subheader("📋 Détail des opérations")
-    
-    if not df_frais.empty:
+        df_frais['Montant (€)'] = df_frais['Montant (€)'].apply(clean_price)
+        
         for index, row in df_frais.iterrows():
+            montant_total = float(row['Montant (€)'])
+            moitie = abs(montant_total) / 2
+            payeur_nom = row['Payé par']
+            autre_parent = nom_p2 if payeur_nom == nom_p1 else nom_p1
+            est_rembourse = row['Remboursé']
+            
+            # 🧮 CALCUL DES DETTES (seulement si la ligne n'est pas encore cochée)
+            if not est_rembourse:
+                if montant_total > 0: # C'est une Dépense
+                    if payeur_nom == nom_p1:
+                        total_du_p2 += moitie
+                    else:
+                        total_du_p1 += moitie
+                elif montant_total < 0: # C'est un Remboursement
+                    if payeur_nom == nom_p1:
+                        total_du_p1 += moitie
+                    else:
+                        total_du_p2 += moitie
+
+            # 🖥️ AFFICHAGE LIGNE PAR LIGNE
             with st.container():
-                col1, col2, col3, col4 = st.columns([1, 3, 1, 1])
+                col1, col2, col3, col4 = st.columns([1, 2, 3, 1])
                 
-                barre = "~~" if row['Remboursé'] else "" 
-                montant_float = float(row['Montant (€)'])
-                
-                # On change le style selon si c'est une dépense ou un remboursement
-                if montant_float < 0:
-                    affichage_prix = f"🟢 **+{abs(montant_float):.2f} €**"
-                    action_texte = "reçu par"
-                else:
-                    affichage_prix = f"🔴 **-{montant_float:.2f} €**"
-                    action_texte = "payé par"
+                barre = "~~" if est_rembourse else "" 
                 
                 col1.write(f"📅 {row['Date']}")
-                col2.write(f"{barre}**{row['Description']}** ({action_texte} {row['Payé par']}){barre}")
-                col3.write(f"{barre}{affichage_prix}{barre}")
+                col2.write(f"{barre}**{row['Description']}**{barre}")
+                
+                # Le petit texte d'explication qui rend tout transparent
+                if montant_total >= 0:
+                    texte_detail = f"🔴 Payé {montant_total:.2f} € par {payeur_nom}  \n👉 *{autre_parent} doit {moitie:.2f} €*"
+                else:
+                    texte_detail = f"🟢 Reçu {abs(montant_total):.2f} € par {payeur_nom}  \n👉 *{payeur_nom} doit {moitie:.2f} € à {autre_parent}*"
+                    
+                col3.write(f"{barre}{texte_detail}{barre}")
                 
                 with col4:
                     c_act1, c_act2 = st.columns(2)
                     
-                    if not row['Remboursé']:
-                        if c_act1.button("✅", key=f"remb_{index}", help="Marquer comme réglé"):
+                    if not est_rembourse:
+                        if c_act1.button("✅", key=f"remb_{index}", help="Valider que cette part a été réglée"):
                             df_frais.at[index, 'Remboursé'] = True
                             save_full_df("Frais", df_frais)
                             st.rerun()
                     else:
                         c_act1.write("✔️") 
                         
-                    if c_act2.button("🗑️", key=f"del_{index}", help="Supprimer l'erreur"):
+                    if c_act2.button("🗑️", key=f"del_{index}", help="Supprimer en cas d'erreur"):
                         df_frais = df_frais.drop(index)
                         save_full_df("Frais", df_frais)
                         st.rerun()
-                
-                st.divider()
+            
+            st.divider()
+    else:
+        st.info("Aucune opération enregistrée.")
+
+    st.markdown("---")
+
+    # --- 3. LE SUPER BILAN GLOBAL ---
+    st.subheader("⚖️ Super Bilan Final")
+    st.write("Ce résumé fait le tri de toutes les lignes non validées ci-dessus pour donner le montant exact à transférer pour équilibrer les comptes.")
+    
+    # Calcul magique de la différence
+    diff_nette = total_du_p1 - total_du_p2
+    
+    col_sb1, col_sb2, col_sb3 = st.columns(3)
+    col_sb1.metric(f"Total des dettes de {nom_p1}", f"{total_du_p1:.2f} €")
+    col_sb2.metric(f"Total des dettes de {nom_p2}", f"{total_du_p2:.2f} €")
+    
+    if diff_nette > 0:
+        col_sb3.error(f"💸 Au final, **{nom_p1}** doit faire un virement de **{diff_nette:.2f} €** à {nom_p2}")
+    elif diff_nette < 0:
+        col_sb3.error(f"💸 Au final, **{nom_p2}** doit faire un virement de **{abs(diff_nette):.2f} €** à {nom_p1}")
+    else:
+        if total_du_p1 == 0 and total_du_p2 == 0:
+            col_sb3.success("✅ Comptes parfaits, aucun parent ne doit rien !")
+        else:
+            col_sb3.success("✅ Les dettes s'annulent ! (0 € à verser)")
