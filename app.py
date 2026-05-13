@@ -209,23 +209,29 @@ with tab3:
     # --- 1. FORMULAIRE D'AJOUT ---
     with st.expander("➕ Ajouter une opération", expanded=True):
         with st.form("add_frais", clear_on_submit=True):
-            type_op = st.radio("Type d'opération :", ["🔴 Dépense (J'ai payé)", "🟢 Remboursement (J'ai reçu de l'argent)"], horizontal=True)
+            # LE NOUVEAU BOUTON À 3 OPTIONS !
+            type_op = st.radio("Type d'opération :", [
+                "🔴 Dépense (Achat commun)", 
+                "🟢 Rentrée d'argent (Garderie, mutuelle...)",
+                "🔄 Virement à l'autre parent (Remboursement de dette)"
+            ])
             
             c1, c2 = st.columns(2)
             dfra = c1.date_input("Date")
-            payeur = c2.selectbox("Payé / Reçu par :", [nom_p1, nom_p2])
+            payeur = c2.selectbox("Payé / Envoyé par :", [nom_p1, nom_p2])
             
             montant_str = st.text_input("Montant (€) - Ex: 12,50", value="")
-            descf = st.text_input("Objet (ex: Chaussures, Mutuelle, Garderie...)")
+            descf = st.text_input("Objet (ex: Chaussures, Virement de Papa, etc.)")
             
             if st.form_submit_button("Enregistrer l'opération"):
                 if montant_str and descf:
-                    # On prépare la virgule pour Google Sheets
                     montant_pour_sheets = montant_str.replace('.', ',')
                     
-                    # Si c'est un remboursement, on met le chiffre en négatif
                     if "🟢" in type_op:
                         montant_pour_sheets = "-" + montant_pour_sheets.replace('-', '')
+                    elif "🔄" in type_op:
+                        # On glisse un mot-clé secret pour que l'ordi reconnaisse le virement
+                        descf = f"🔄 VIREMENT : {descf}"
                         
                     append_row("Frais", [str(dfra), payeur, montant_pour_sheets, descf, False])
                     st.rerun()
@@ -237,14 +243,12 @@ with tab3:
     # --- 2. LISTE DÉTAILLÉE PAR OPÉRATION ---
     st.subheader("📋 Détail des opérations")
     
-    # Initialisation des compteurs pour le Super Bilan
-    total_du_p1 = 0.0 # Ce que le Parent 1 doit au Parent 2
-    total_du_p2 = 0.0 # Ce que le Parent 2 doit au Parent 1
+    total_du_p1 = 0.0
+    total_du_p2 = 0.0
     
     if not df_frais.empty:
         df_frais.columns = df_frais.columns.str.strip()
         
-        # NETTOYAGE SÉCURISÉ (qui garde le signe moins)
         def clean_price(val):
             v = str(val).replace(',', '.')
             v = v.replace('€', '').replace(' ', '').replace('\xa0', '')
@@ -261,19 +265,28 @@ with tab3:
             payeur_nom = row['Payé par']
             autre_parent = nom_p2 if payeur_nom == nom_p1 else nom_p1
             est_rembourse = row['Remboursé']
+            description = str(row['Description'])
             
-            # 🧮 CALCUL DES DETTES (seulement si la ligne n'est pas encore cochée)
+            # 🧮 CALCUL DES DETTES INTÉGRÉ
             if not est_rembourse:
-                if montant_total > 0: # C'est une Dépense
+                if "🔄 VIREMENT" in description:
+                    # Règle d'or : Un virement compte à 100% ! Pas de division par 2.
                     if payeur_nom == nom_p1:
-                        total_du_p2 += moitie
+                        total_du_p2 += abs(montant_total)
                     else:
-                        total_du_p1 += moitie
-                elif montant_total < 0: # C'est un Remboursement
-                    if payeur_nom == nom_p1:
-                        total_du_p1 += moitie
-                    else:
-                        total_du_p2 += moitie
+                        total_du_p1 += abs(montant_total)
+                else:
+                    # Achat ou rentrée normale (division par 2)
+                    if montant_total > 0: 
+                        if payeur_nom == nom_p1:
+                            total_du_p2 += moitie
+                        else:
+                            total_du_p1 += moitie
+                    elif montant_total < 0: 
+                        if payeur_nom == nom_p1:
+                            total_du_p1 += moitie
+                        else:
+                            total_du_p2 += moitie
 
             # 🖥️ AFFICHAGE LIGNE PAR LIGNE
             with st.container():
@@ -282,10 +295,14 @@ with tab3:
                 barre = "~~" if est_rembourse else "" 
                 
                 col1.write(f"📅 {row['Date']}")
-                col2.write(f"{barre}**{row['Description']}**{barre}")
                 
-                # Le petit texte d'explication qui rend tout transparent
-                if montant_total >= 0:
+                # On cache le mot-clé secret pour que ce soit joli à l'écran
+                desc_propre = description.replace("🔄 VIREMENT : ", "")
+                col2.write(f"{barre}**{desc_propre}**{barre}")
+                
+                if "🔄 VIREMENT" in description:
+                    texte_detail = f"🔄 Virement de {abs(montant_total):.2f} €  \n👉 *De {payeur_nom} vers {autre_parent}*"
+                elif montant_total >= 0:
                     texte_detail = f"🔴 Payé {montant_total:.2f} € par {payeur_nom}  \n👉 *{autre_parent} doit {moitie:.2f} €*"
                 else:
                     texte_detail = f"🟢 Reçu {abs(montant_total):.2f} € par {payeur_nom}  \n👉 *{payeur_nom} doit {moitie:.2f} € à {autre_parent}*"
@@ -296,7 +313,15 @@ with tab3:
                     c_act1, c_act2 = st.columns(2)
                     
                     if not est_rembourse:
-                        if c_act1.button("✅", key=f"remb_{index}", help="Valider que cette part a été réglée"):
+                        # Bouton spécial pour valider la réception du virement
+                        if "🔄 VIREMENT" in description:
+                            bouton_titre = "🤝"
+                            help_txt = "Valider la bonne réception de ce virement"
+                        else:
+                            bouton_titre = "✅"
+                            help_txt = "Valider que cette part a été réglée"
+                            
+                        if c_act1.button(bouton_titre, key=f"remb_{index}", help=help_txt):
                             df_frais.at[index, 'Remboursé'] = True
                             save_full_df("Frais", df_frais)
                             st.rerun()
@@ -316,21 +341,20 @@ with tab3:
 
     # --- 3. LE SUPER BILAN GLOBAL ---
     st.subheader("⚖️ Super Bilan Final")
-    st.write("Ce résumé fait le tri de toutes les lignes non validées ci-dessus pour donner le montant exact à transférer pour équilibrer les comptes.")
+    st.write("Ce résumé calcule instantanément qui doit de l'argent à qui, en incluant les achats et vos virements de remboursement.")
     
-    # Calcul magique de la différence
     diff_nette = total_du_p1 - total_du_p2
     
     col_sb1, col_sb2, col_sb3 = st.columns(3)
-    col_sb1.metric(f"Total des dettes de {nom_p1}", f"{total_du_p1:.2f} €")
-    col_sb2.metric(f"Total des dettes de {nom_p2}", f"{total_du_p2:.2f} €")
+    col_sb1.metric(f"Dettes de {nom_p1}", f"{total_du_p1:.2f} €")
+    col_sb2.metric(f"Dettes de {nom_p2}", f"{total_du_p2:.2f} €")
     
     if diff_nette > 0:
-        col_sb3.error(f"💸 Au final, **{nom_p1}** doit faire un virement de **{diff_nette:.2f} €** à {nom_p2}")
+        col_sb3.error(f"💸 Au final, **{nom_p1}** doit verser **{diff_nette:.2f} €** à {nom_p2}")
     elif diff_nette < 0:
-        col_sb3.error(f"💸 Au final, **{nom_p2}** doit faire un virement de **{abs(diff_nette):.2f} €** à {nom_p1}")
+        col_sb3.error(f"💸 Au final, **{nom_p2}** doit verser **{abs(diff_nette):.2f} €** à {nom_p1}")
     else:
         if total_du_p1 == 0 and total_du_p2 == 0:
             col_sb3.success("✅ Comptes parfaits, aucun parent ne doit rien !")
         else:
-            col_sb3.success("✅ Les dettes s'annulent ! (0 € à verser)")
+            col_sb3.success("✅ Les comptes sont à l'équilibre parfait ! (0 € à verser)")
