@@ -134,7 +134,7 @@ style_global = textwrap.dedent("""
 """)
 st.markdown(style_global, unsafe_allow_html=True)
 
-st.markdown('<h1 class="main-title">👨‍👩‍👧 Coparentalité sereine</h1>', unsafe_allow_html=True)
+st.markdown('<h1 class="main-title">Coparentalité sereine</h1>', unsafe_allow_html=True)
 st.markdown('<p class="subtitle">Votre espace partagé d\'agenda, d\'activités et de dépenses</p>', unsafe_allow_html=True)
 
 # --- PARAMÈTRES (SIDEBAR) ---
