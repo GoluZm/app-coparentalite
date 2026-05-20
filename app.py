@@ -80,7 +80,7 @@ def append_row(sheet_name, row_list):
 # --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(page_title="App de Garde Alternée", page_icon="👨‍👩‍👧", layout="wide")
 
-# Injection de styles CSS globaux pour un rendu premium (utilisant textwrap.dedent pour éliminer tout retrait de paragraphe gênant)
+# Injection de styles CSS globaux pour un rendu premium
 style_global = textwrap.dedent("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
@@ -219,7 +219,7 @@ noms_jours = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
 # Affichage des 7 colonnes pour le bandeau
 cols_bandeau = st.columns(7)
 
-# CSS pour le bandeau - dedent complet pour éviter l'interprétation Markdown Code
+# CSS pour le bandeau
 style_bandeau = textwrap.dedent("""
     <style>
     .bandeau-card {
@@ -370,7 +370,7 @@ with tab1:
     
     cal = calendar.monthcalendar(a_choisie, m_choisi)
     
-    # CSS du calendrier mensuel premium - Dédenté à plat
+    # CSS du calendrier mensuel premium
     style_calendrier = textwrap.dedent("""
         <style>
         .cal-table {
@@ -504,7 +504,7 @@ with tab1:
                     except:
                         pass
                 
-                # Construction sur une seule ligne stricte pour interdire le comportement code block Markdown
+                # Construction sur une seule ligne
                 html_cal += f'<td>' \
                             f'<div class="jour-num-container"><span>{jour}</span>{note_indicator}</div>' \
                             f'<div class="{cl_parent}">{parent_g}</div>' \
@@ -590,335 +590,277 @@ with tab2:
         st.rerun()
 
 # =========================================================================
-# ONGLET 3 : FRAIS & BUDGET (DASHBOARD PLOTLY ET DÉPENSES RÉCURRENTES)
+# ONGLET 3 : FRAIS & BUDGET (SANS SOUS-ONGLETS, COMPLET & ASSAINI)
 # =========================================================================
 with tab3:
     st.header("💰 Dépenses communes et Remboursements")
 
-    # Sous-onglets pour scinder proprement Dépenses et Dépenses Récurrentes
-    sub_tab1, sub_tab2 = st.tabs(["📊 Opérations & Bilan", "🔄 Paramétrage des Dépenses Récurrentes"])
-
-    # ----------------------------------------------------
-    # SOUS-ONGLET 1 : OPÉRATIONS ET BILAN GRAPHIQUE
-    # ----------------------------------------------------
-    with sub_tab1:
-        # Formulaire d'ajout
-        with st.expander("➕ Ajouter une nouvelle opération", expanded=True):
-            with st.form("add_frais", clear_on_submit=True):
-                type_op = st.radio("Type d'opération :", [
-                    "🔴 Dépense (Achat commun à diviser)", 
-                    "🟢 Rentrée d'argent (Remboursement tiers, allocs, mutuelle...)",
-                    "🔄 Virement de remboursement (D'un parent à l'autre)"
-                ], horizontal=True)
-                
-                c1, c2 = st.columns(2)
-                dfra = c1.date_input("Date de l'opération")
-                payeur = c2.selectbox("Payé / Reçu par :", [nom_p1, nom_p2])
-                
-                c3, c4 = st.columns(2)
-                montant_str = c3.text_input("Montant (€) - Ex: 12.50", value="")
-                
-                # Catégories conformes (pas d'Alimentaire)
-                cat_choisie = c4.selectbox("Catégorie :", [
-                    "🏫 École",
-                    "🩺 Santé",
-                    "⚽ Loisirs & Activités",
-                    "👕 Habillement",
-                    "🚗 Transports",
-                    "🪙 Autre"
-                ])
-                
-                descf = st.text_input("Objet / Description de la dépense")
-                
-                if st.form_submit_button("Enregistrer l'opération", use_container_width=True):
-                    if montant_str and descf:
-                        montant_pour_sheets = montant_str.replace('.', ',')
-                        
-                        if "🟢" in type_op:
-                            montant_pour_sheets = "-" + montant_pour_sheets.replace('-', '')
-                        elif "🔄" in type_op:
-                            descf = f"🔄 VIREMENT : {descf}"
-                            
-                        append_row("Frais", [str(dfra), payeur, montant_pour_sheets, descf, False, cat_choisie])
-                        st.toast("Opération enregistrée avec succès !", icon="💰")
-                        st.rerun()
-                    else:
-                        st.error("⚠️ Veuillez saisir un montant et une description valide !")
-
-        # Nettoyage et préparation des données
-        total_du_p1 = 0.0
-        total_du_p2 = 0.0
-        
-        if not df_frais.empty:
-            df_frais.columns = df_frais.columns.str.strip()
-            
-            # Fonction robuste pour nettoyer les prix
-            def clean_price(val):
-                v = str(val).replace(',', '.')
-                if '(' in v and ')' in v:
-                    v = '-' + v.replace('(', '').replace(')', '')
-                v = v.replace('€', '').replace(' ', '').replace('\xa0', '')
-                v = v.replace('−', '-').replace('—', '-')
-                try:
-                    return float(v)
-                except:
-                    return 0.0
-
-            df_frais['Montant (€)'] = df_frais['Montant (€)'].apply(clean_price)
-            
-            # Copie pour les graphiques avant modification
-            df_non_remb = df_frais[~df_frais['Remboursé']].copy()
-            
-            # Calcul des dettes
-            for index, row in df_frais.iterrows():
-                montant_total = float(row['Montant (€)'])
-                moitie = abs(montant_total) / 2
-                payeur_nom = row['Payé par']
-                autre_parent = nom_p2 if payeur_nom == nom_p1 else nom_p1
-                est_rembourse = row['Remboursé']
-                description = str(row['Description'])
-                
-                if not est_rembourse:
-                    if "🔄 VIREMENT" in description:
-                        if payeur_nom == nom_p1:
-                            total_du_p2 += abs(montant_total)
-                        else:
-                            total_du_p1 += abs(montant_total)
-                    else:
-                        if montant_total > 0: 
-                            if payeur_nom == nom_p1:
-                                total_du_p2 += moitie
-                            else:
-                                total_du_p1 += moitie
-                        elif montant_total < 0: 
-                            if payeur_nom == nom_p1:
-                                total_du_p1 += moitie
-                            else:
-                                total_du_p2 += moitie
-
-            # =========================================================================
-            # 📊 LE SUPER TABLEAU DE BORD INTERACTIF (PLOTLY)
-            # =========================================================================
-            st.markdown("<h3 style='font-weight: 800; color: #1e3a8a; margin-top:25px;'>📊 Analyse du budget commun</h3>", unsafe_allow_html=True)
-            
-            col_chart1, col_chart2 = st.columns(2)
-            
-            # 1. Graphique en Donut des catégories (sur les dépenses non remboursées)
-            with col_chart1:
-                # Filtrer les dépenses classiques (positives) non remboursées
-                df_dep = df_non_remb[(df_non_remb['Montant (€)'] > 0) & (~df_non_remb['Description'].str.contains("🔄 VIREMENT"))]
-                
-                if not df_dep.empty:
-                    df_grouped = df_dep.groupby('Catégorie', as_index=False)['Montant (€)'].sum()
-                    
-                    fig_donut = px.pie(
-                        df_grouped, 
-                        values='Montant (€)', 
-                        names='Catégorie', 
-                        hole=0.45,
-                        title="💰 Répartition des dépenses en cours par catégorie",
-                        color_discrete_sequence=px.colors.qualitative.Pastel
-                    )
-                    fig_donut.update_traces(textinfo='percent+label', pull=[0.02]*len(df_grouped))
-                    fig_donut.update_layout(
-                        showlegend=False, 
-                        margin=dict(t=40, b=0, l=0, r=0),
-                        paper_bgcolor='rgba(0,0,0,0)',
-                        plot_bgcolor='rgba(0,0,0,0)'
-                    )
-                    st.plotly_chart(fig_donut, use_container_width=True)
-                else:
-                    st.info("Aucune dépense en cours pour le graphique par catégorie.")
-            
-            # 2. Graphique comparatif des contributions totales de chaque parent
-            with col_chart2:
-                # Contributions globales (somme des achats réels payés par chacun)
-                df_dep_all = df_non_remb[(df_non_remb['Montant (€)'] > 0) & (~df_non_remb['Description'].str.contains("🔄 VIREMENT"))]
-                
-                if not df_dep_all.empty:
-                    df_contrib = df_dep_all.groupby('Payé par', as_index=False)['Montant (€)'].sum()
-                    
-                    fig_bar = px.bar(
-                        df_contrib,
-                        x='Payé par',
-                        y='Montant (€)',
-                        title="⚖️ Total dépensé par parent (Achats communs)",
-                        labels={'Payé par': 'Parent', 'Montant (€)': 'Total Dépensé (€)'},
-                        color='Payé par',
-                        color_discrete_map={nom_p1: '#3b82f6', nom_p2: '#10b981'}
-                    )
-                    fig_bar.update_layout(
-                        showlegend=False,
-                        margin=dict(t=40, b=20, l=20, r=20),
-                        paper_bgcolor='rgba(0,0,0,0)',
-                        plot_bgcolor='rgba(0,0,0,0)'
-                    )
-                    st.plotly_chart(fig_bar, use_container_width=True)
-                else:
-                    st.info("Aucune contribution enregistrée.")
-
-            st.markdown("---")
-
-            # --- LISTE DES OPÉRATIONS ---
-            st.subheader("📋 Liste des opérations en cours / validées")
-            
-            for index, row in df_frais.iterrows():
-                montant_total = float(row['Montant (€)'])
-                moitie = abs(montant_total) / 2
-                payeur_nom = row['Payé par']
-                autre_parent = nom_p2 if payeur_nom == nom_p1 else nom_p1
-                est_rembourse = row['Remboursé']
-                description = str(row['Description'])
-                categorie = row.get('Catégorie', 'Autre 🪙')
-                
-                with st.container():
-                    col1, col2, col3, col4 = st.columns([1, 2, 3, 1])
-                    
-                    barre = "~~" if est_rembourse else "" 
-                    
-                    # Date & Catégorie
-                    col1.write(f"📅 {row['Date']}")
-                    col1.markdown(f"<span style='font-size:0.85em; background:#f1f5f9; padding:2px 8px; border-radius:10px; color:#475569;'>{categorie}</span>", unsafe_allow_html=True)
-                    
-                    # Description
-                    desc_propre = description.replace("🔄 VIREMENT : ", "")
-                    col2.write(f"{barre}**{desc_propre}**{barre}")
-                    
-                    # Détail
-                    if "🔄 VIREMENT" in description:
-                        texte_detail = f"🔄 Virement de {abs(montant_total):.2f} €  \n👉 *De {payeur_nom} vers {autre_parent}*"
-                    elif montant_total >= 0:
-                        texte_detail = f"🔴 Achat de {montant_total:.2f} € par {payeur_nom}  \n👉 *{autre_parent} doit {moitie:.2f} €*"
-                    else:
-                        texte_detail = f"🟢 Reçu {abs(montant_total):.2f} € par {payeur_nom}  \n👉 *{payeur_nom} doit {moitie:.2f} € à {autre_parent}*"
-                        
-                    col3.write(f"{barre}{texte_detail}{barre}")
-                    
-                    with col4:
-                        c_act1, c_act2 = st.columns(2)
-                        
-                        if not est_rembourse:
-                            bouton_titre = "🤝" if "🔄 VIREMENT" in description else "✅"
-                            help_txt = "Valider la réception" if "🔄 VIREMENT" in description else "Valider le règlement"
-                                
-                            if c_act1.button(bouton_titre, key=f"remb_{index}", help=help_txt):
-                                df_frais.at[index, 'Remboursé'] = True
-                                save_full_df("Frais", df_frais)
-                                st.toast("Règlement validé !")
-                                st.rerun()
-                        else:
-                            c_act1.write("✔️ Validé") 
-                            
-                        if c_act2.button("🗑️", key=f"del_{index}", help="Supprimer cette ligne"):
-                            df_frais = df_frais.drop(index)
-                            save_full_df("Frais", df_frais)
-                            st.toast("Opération supprimée !")
-                            st.rerun()
-                
-                st.divider()
-        else:
-            st.info("Aucune dépense enregistrée.")
-
-        # --- LE BILAN FINANCIER ---
-        st.subheader("⚖️ Bilan financier global (Solde final)")
-        st.write("Calcul instantané de la balance, achats et virements inclus :")
-        
-        diff_nette = total_du_p1 - total_du_p2
-        
-        col_sb1, col_sb2, col_sb3 = st.columns(3)
-        col_sb1.metric(f"Dettes cumulées de {nom_p1}", f"{total_du_p1:.2f} €")
-        col_sb2.metric(f"Dettes cumulées de {nom_p2}", f"{total_du_p2:.2f} €")
-        
-        if diff_nette > 0:
-            col_sb3.error(f"💸 Finalement : **{nom_p1}** doit verser **{diff_nette:.2f} €** à {nom_p2}")
-        elif diff_nette < 0:
-            col_sb3.error(f"💸 Finalement : **{nom_p2}** doit verser **{abs(diff_nette):.2f} €** à {nom_p1}")
-        else:
-            if total_du_p1 == 0 and total_du_p2 == 0:
-                col_sb3.success("✅ Tout est parfaitement réglé, aucun parent ne doit rien !")
-            else:
-                col_sb3.success("✅ Équilibre parfait ! (0 € de différence)")
-
-    # ----------------------------------------------------
-    # SOUS-ONGLET 2 : DÉPENSES RÉCURRENTES AUTOMATIQUES
-    # ----------------------------------------------------
-    with sub_tab2:
-        st.subheader("🔄 Gestion des charges récurrentes")
-        st.write("Configurez ici les charges fixes (mutuelle, école, cantine, abonnements...) pour les intégrer en un seul clic chaque mois dans les comptes.")
-
-        # 1. Formulaire d'ajout de dépense récurrente
-        with st.expander("➕ Enregistrer une nouvelle dépense récurrente", expanded=False):
-            with st.form("add_rec", clear_on_submit=True):
-                r_desc = st.text_input("Intitulé / Objet", placeholder="Ex : Cantine scolaire, Abonnement Gym...")
-                r_payeur = st.selectbox("Qui paie ?", [nom_p1, nom_p2], key="rec_p")
-                
-                c_m, c_c = st.columns(2)
-                r_montant = c_m.text_input("Montant (€) - Ex: 45.00")
-                r_cat = c_c.selectbox("Catégorie :", [
-                    "🏫 École",
-                    "🩺 Santé",
-                    "⚽ Loisirs & Activités",
-                    "👕 Habillement",
-                    "🚗 Transports",
-                    "🪙 Autre"
-                ], key="rec_cat")
-                
-                r_jour = st.slider("Jour de prélèvement dans le mois", 1, 28, 5)
-                
-                if st.form_submit_button("Sauvegarder ce modèle"):
-                    if r_desc and r_montant:
-                        append_row("FraisRecurrents", [r_desc, r_payeur, r_montant.replace('.', ','), r_cat, r_jour])
-                        st.toast("Modèle récurrent enregistré !")
-                        st.rerun()
-                    else:
-                        st.error("Veuillez remplir tous les champs !")
-
-        # 2. Bouton Générateur Intelligent
-        st.markdown("### ⚡ Générateur de frais mensuels")
-        st.info("Ce bouton va analyser vos modèles de frais récurrents et les ajouter automatiquement à la liste des dépenses communes pour le mois en cours (sauf s'ils ont déjà été ajoutés). Aucun doublon possible !")
-        
-        if not df_recurrents.empty:
+    # --- BOUTON DE GÉNÉRATION DES FRAIS RÉCURRENTS (Optionnel, dans un expander discret) ---
+    if not df_recurrents.empty:
+        with st.expander("🔄 Générer les charges récurrentes du mois", expanded=False):
             mois_courant_nom = noms_mois[date.today().month - 1]
-            if st.button(f"🚀 Générer les frais récurrents pour {mois_courant_nom} {date.today().year}", use_container_width=True):
-                # Lecture fraîche des frais existants pour éviter les doublons
+            st.write(f"Ajoutez automatiquement les charges pré-configurées dans votre feuille Google Sheet **FraisRecurrents** pour le mois de {mois_courant_nom} {date.today().year}.")
+            if st.button(f"🚀 Générer les frais récurrents pour {mois_courant_nom}", use_container_width=True):
                 df_frais_frais = get_data("Frais")
                 frais_ajoutes_count = 0
                 
                 for _, rec_row in df_recurrents.iterrows():
-                    jour_frais = int(rec_row['Jour du mois'])
-                    # Création de la date cible pour le mois en cours
-                    date_operation = date(date.today().year, date.today().month, jour_frais)
-                    description_operation = f"[Récurrent] {rec_row['Description']}"
-                    montant_operation = str(rec_row['Montant (€)']).replace('.', ',')
-                    payeur_operation = rec_row['Payé par']
-                    cat_operation = rec_row.get('Catégorie', 'Autre 🪙')
-                    
-                    # Vérifier si cette dépense a déjà été ajoutée pour ce mois (même date, même description, même montant)
-                    if not df_frais_frais.empty:
-                        # Nettoyer les descriptions existantes pour comparaison
-                        doublon = df_frais_frais[
-                            (df_frais_frais['Date'].astype(str) == str(date_operation)) & 
-                            (df_frais_frais['Description'].astype(str) == description_operation)
-                        ]
-                    else:
-                        doublon = pd.DataFrame()
+                    try:
+                        jour_frais = int(rec_row['Jour du mois'])
+                        date_operation = date(date.today().year, date.today().month, jour_frais)
+                        description_operation = f"[Récurrent] {rec_row['Description']}"
+                        montant_operation = str(rec_row['Montant (€)']).replace('.', ',')
+                        payeur_operation = rec_row['Payé par']
+                        cat_operation = rec_row.get('Catégorie', 'Autre 🪙')
                         
-                    if doublon.empty:
-                        # Ajout
-                        append_row("Frais", [str(date_operation), payeur_operation, montant_operation, description_operation, False, cat_operation])
-                        frais_ajoutes_count += 1
+                        if not df_frais_frais.empty:
+                            doublon = df_frais_frais[
+                                (df_frais_frais['Date'].astype(str) == str(date_operation)) & 
+                                (df_frais_frais['Description'].astype(str) == description_operation)
+                            ]
+                        else:
+                            doublon = pd.DataFrame()
+                            
+                        if doublon.empty:
+                            append_row("Frais", [str(date_operation), payeur_operation, montant_operation, description_operation, False, cat_operation])
+                            frais_ajoutes_count += 1
+                    except Exception as ex:
+                        pass
                 
                 if frais_ajoutes_count > 0:
-                    st.toast(f"{frais_ajoutes_count} frais récurrents ont été générés pour le mois de {mois_courant_nom} !", icon="🚀")
+                    st.toast(f"{frais_ajoutes_count} frais récurrents ont été générés !", icon="🚀")
                 else:
-                    st.toast("Aucun frais généré : tout est déjà à jour pour ce mois-ci !", icon="✨")
+                    st.toast("Aucun frais généré : tout est déjà à jour !", icon="✨")
                 st.rerun()
 
-            st.markdown("### 📋 Liste de vos modèles récurrents")
-            edited_rec = st.data_editor(df_recurrents, num_rows="dynamic", use_container_width=True)
-            if st.button("Enregistrer les modifications des modèles récurrents", use_container_width=True):
-                save_full_df("FraisRecurrents", edited_rec)
-                st.toast("Modèles mis à jour !")
-                st.rerun()
+    # --- Formulaire d'ajout d'une opération ---
+    with st.expander("➕ Ajouter une nouvelle opération", expanded=True):
+        with st.form("add_frais", clear_on_submit=True):
+            type_op = st.radio("Type d'opération :", [
+                "🔴 Dépense (Achat commun à diviser)", 
+                "🟢 Rentrée d'argent (Remboursement tiers, allocs, mutuelle...)",
+                "🔄 Virement de remboursement (D'un parent à l'autre)"
+            ], horizontal=True)
+            
+            c1, c2 = st.columns(2)
+            dfra = c1.date_input("Date de l'opération")
+            payeur = c2.selectbox("Payé / Reçu par :", [nom_p1, nom_p2])
+            
+            c3, c4 = st.columns(2)
+            montant_str = c3.text_input("Montant (€) - Ex: 12.50", value="")
+            
+            # Catégories conformes
+            cat_choisie = c4.selectbox("Catégorie :", [
+                "🏫 École",
+                "🩺 Santé",
+                "⚽ Loisirs & Activités",
+                "👕 Habillement",
+                "🚗 Transports",
+                "🪙 Autre"
+            ])
+            
+            descf = st.text_input("Objet / Description de la dépense")
+            
+            if st.form_submit_button("Enregistrer l'opération", use_container_width=True):
+                if montant_str and descf:
+                    montant_pour_sheets = montant_str.replace('.', ',')
+                    
+                    if "🟢" in type_op:
+                        montant_pour_sheets = "-" + montant_pour_sheets.replace('-', '')
+                    elif "🔄" in type_op:
+                        descf = f"🔄 VIREMENT : {descf}"
+                        
+                    append_row("Frais", [str(dfra), payeur, montant_pour_sheets, descf, False, cat_choisie])
+                    st.toast("Opération enregistrée avec succès !", icon="💰")
+                    st.rerun()
+                else:
+                    st.error("⚠️ Veuillez saisir un montant et une description valide !")
+
+    # Nettoyage et préparation des données
+    total_du_p1 = 0.0
+    total_du_p2 = 0.0
+    
+    if not df_frais.empty:
+        df_frais.columns = df_frais.columns.str.strip()
+        
+        # Fonction robuste pour nettoyer les prix
+        def clean_price(val):
+            v = str(val).replace(',', '.')
+            if '(' in v and ')' in v:
+                v = '-' + v.replace('(', '').replace(')', '')
+            v = v.replace('€', '').replace(' ', '').replace('\xa0', '')
+            v = v.replace('−', '-').replace('—', '-')
+            try:
+                return float(v)
+            except:
+                return 0.0
+
+        df_frais['Montant (€)'] = df_frais['Montant (€)'].apply(clean_price)
+        
+        # Copie pour les graphiques avant modification
+        df_non_remb = df_frais[~df_frais['Remboursé']].copy()
+        
+        # Calcul des dettes
+        for index, row in df_frais.iterrows():
+            montant_total = float(row['Montant (€)'])
+            moitie = abs(montant_total) / 2
+            payeur_nom = row['Payé par']
+            autre_parent = nom_p2 if payeur_nom == nom_p1 else nom_p1
+            est_rembourse = row['Remboursé']
+            description = str(row['Description'])
+            
+            if not est_rembourse:
+                if "🔄 VIREMENT" in description:
+                    if payeur_nom == nom_p1:
+                        total_du_p2 += abs(montant_total)
+                    else:
+                        total_du_p1 += abs(montant_total)
+                else:
+                    if montant_total > 0: 
+                        if payeur_nom == nom_p1:
+                            total_du_p2 += moitie
+                        else:
+                            total_du_p1 += moitie
+                    elif montant_total < 0: 
+                        if payeur_nom == nom_p1:
+                            total_du_p1 += moitie
+                        else:
+                            total_du_p2 += moitie
+
+        # =========================================================================
+        # 📊 LE SUPER TABLEAU DE BORD INTERACTIF (PLOTLY)
+        # =========================================================================
+        st.markdown("<h3 style='font-weight: 800; color: #1e3a8a; margin-top:25px;'>📊 Analyse du budget commun</h3>", unsafe_allow_html=True)
+        
+        col_chart1, col_chart2 = st.columns(2)
+        
+        # 1. Graphique en Donut des catégories
+        with col_chart1:
+            df_dep = df_non_remb[(df_non_remb['Montant (€)'] > 0) & (~df_non_remb['Description'].str.contains("🔄 VIREMENT"))]
+            
+            if not df_dep.empty:
+                df_grouped = df_dep.groupby('Catégorie', as_index=False)['Montant (€)'].sum()
+                
+                fig_donut = px.pie(
+                    df_grouped, 
+                    values='Montant (€)', 
+                    names='Catégorie', 
+                    hole=0.45,
+                    title="💰 Répartition des dépenses en cours par catégorie",
+                    color_discrete_sequence=px.colors.qualitative.Pastel
+                )
+                fig_donut.update_traces(textinfo='percent+label', pull=[0.02]*len(df_grouped))
+                fig_donut.update_layout(
+                    showlegend=False, 
+                    margin=dict(t=40, b=0, l=0, r=0),
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)'
+                )
+                st.plotly_chart(fig_donut, use_container_width=True)
+            else:
+                st.info("Aucune dépense en cours pour le graphique par catégorie.")
+        
+        # 2. Graphique comparatif des contributions totales
+        with col_chart2:
+            df_dep_all = df_non_remb[(df_non_remb['Montant (€)'] > 0) & (~df_non_remb['Description'].str.contains("🔄 VIREMENT"))]
+            
+            if not df_dep_all.empty:
+                df_contrib = df_dep_all.groupby('Payé par', as_index=False)['Montant (€)'].sum()
+                
+                fig_bar = px.bar(
+                    df_contrib,
+                    x='Payé par',
+                    y='Montant (€)',
+                    title="⚖️ Total dépensé par parent (Achats communs)",
+                    labels={'Payé par': 'Parent', 'Montant (€)': 'Total Dépensé (€)'},
+                    color='Payé par',
+                    color_discrete_map={nom_p1: '#3b82f6', nom_p2: '#10b981'}
+                )
+                fig_bar.update_layout(
+                    showlegend=False,
+                    margin=dict(t=40, b=20, l=20, r=20),
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)'
+                )
+                st.plotly_chart(fig_bar, use_container_width=True)
+            else:
+                st.info("Aucune contribution enregistrée.")
+
+        st.markdown("---")
+
+        # --- LISTE DES OPÉRATIONS ---
+        st.subheader("📋 Liste des opérations en cours / validées")
+        
+        for index, row in df_frais.iterrows():
+            montant_total = float(row['Montant (€)'])
+            moitie = abs(montant_total) / 2
+            payeur_nom = row['Payé par']
+            autre_parent = nom_p2 if payeur_nom == nom_p1 else nom_p1
+            est_rembourse = row['Remboursé']
+            description = str(row['Description'])
+            categorie = row.get('Catégorie', 'Autre 🪙')
+            
+            with st.container():
+                col1, col2, col3, col4 = st.columns([1, 2, 3, 1])
+                
+                barre = "~~" if est_rembourse else "" 
+                
+                col1.write(f"📅 {row['Date']}")
+                col1.markdown(f"<span style='font-size:0.85em; background:#f1f5f9; padding:2px 8px; border-radius:10px; color:#475569;'>{categorie}</span>", unsafe_allow_html=True)
+                
+                desc_propre = description.replace("🔄 VIREMENT : ", "")
+                col2.write(f"{barre}**{desc_propre}**{barre}")
+                
+                if "🔄 VIREMENT" in description:
+                    texte_detail = f"🔄 Virement de {abs(montant_total):.2f} €  \n👉 *De {payeur_nom} vers {autre_parent}*"
+                elif montant_total >= 0:
+                    texte_detail = f"🔴 Achat de {montant_total:.2f} € par {payeur_nom}  \n👉 *{autre_parent} doit {moitie:.2f} €*"
+                else:
+                    texte_detail = f"🟢 Reçu {abs(montant_total):.2f} € par {payeur_nom}  \n👉 *{payeur_nom} doit {moitie:.2f} € à {autre_parent}*"
+                    
+                col3.write(f"{barre}{texte_detail}{barre}")
+                
+                with col4:
+                    c_act1, c_act2 = st.columns(2)
+                    
+                    if not est_rembourse:
+                        bouton_titre = "🤝" if "🔄 VIREMENT" in description else "✅"
+                        help_txt = "Valider la réception" if "🔄 VIREMENT" in description else "Valider le règlement"
+                            
+                        if c_act1.button(bouton_titre, key=f"remb_{index}", help=help_txt):
+                            df_frais.at[index, 'Remboursé'] = True
+                            save_full_df("Frais", df_frais)
+                            st.toast("Règlement validé !")
+                            st.rerun()
+                    else:
+                        c_act1.write("✔️ Validé") 
+                        
+                    if c_act2.button("🗑️", key=f"del_{index}", help="Supprimer cette ligne"):
+                        df_frais = df_frais.drop(index)
+                        save_full_df("Frais", df_frais)
+                        st.toast("Opération supprimée !")
+                        st.rerun()
+            
+            st.divider()
+    else:
+        st.info("Aucune dépense enregistrée.")
+
+    # --- LE BILAN FINANCIER ---
+    st.subheader("⚖️ Bilan financier global (Solde final)")
+    st.write("Calcul instantané de la balance, achats et virements inclus :")
+    
+    diff_nette = total_du_p1 - total_du_p2
+    
+    col_sb1, col_sb2, col_sb3 = st.columns(3)
+    col_sb1.metric(f"Dettes cumulées de {nom_p1}", f"{total_du_p1:.2f} €")
+    col_sb2.metric(f"Dettes cumulées de {nom_p2}", f"{total_du_p2:.2f} €")
+    
+    if diff_nette > 0:
+        col_sb3.error(f"💸 Finalement : **{nom_p1}** doit verser **{diff_nette:.2f} €** à {nom_p2}")
+    elif diff_nette < 0:
+        col_sb3.error(f"💸 Finalement : **{nom_p2}** doit verser **{abs(diff_nette):.2f} €** à {nom_p1}")
+    else:
+        if total_du_p1 == 0 and total_du_p2 == 0:
+            col_sb3.success("✅ Tout est parfaitement réglé, aucun parent ne doit rien !")
         else:
-            st.caption("Aucun modèle de frais récurrent n'est configuré pour le moment.")
+            col_sb3.success("✅ Équilibre parfait ! (0 € de différence)")
