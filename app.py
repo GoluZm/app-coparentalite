@@ -332,7 +332,7 @@ for idx, jour_date in enumerate(jours_semaine):
 st.markdown("<hr style='margin: 20px 0;'>", unsafe_allow_html=True)
 
 # --- ONGLETS PRINCIPAUX ---
-tab1, tab2, tab3 = st.tabs(["📅 Garde & Notes", "⚽ Activités & Agenda", "💰 Frais & Budget"])
+tab1, tab2, tab3 = st.tabs(["🗓️ Garde & Notes", "⚽ Activités & Agenda", "💰 Frais & Budget"])
 
 # =========================================================================
 # ONGLET 1 : GARDE & NOTES (CALENDRIER MENSUEL PREMIUM)
