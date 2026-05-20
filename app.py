@@ -5,6 +5,7 @@ import calendar
 import gspread
 import json
 import plotly.express as px
+import textwrap
 
 # --- CONNEXION GOOGLE SHEETS ---
 def connect_gsheets():
@@ -79,9 +80,9 @@ def append_row(sheet_name, row_list):
 # --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(page_title="App de Garde Alternée", page_icon="👨‍👩‍👧", layout="wide")
 
-# Injection de styles CSS globaux pour un rendu premium
-st.markdown("""
-<style>
+# Injection de styles CSS globaux pour un rendu premium (utilisant textwrap.dedent pour éliminer tout retrait de paragraphe gênant)
+style_global = textwrap.dedent("""
+    <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
     
     html, body, [class*="css"] {
@@ -129,8 +130,9 @@ st.markdown("""
         color: white !important;
         box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3);
     }
-</style>
-""", unsafe_allow_html=True)
+    </style>
+""")
+st.markdown(style_global, unsafe_allow_html=True)
 
 st.markdown('<h1 class="main-title">👨‍👩‍👧 Coparentalité sereine</h1>', unsafe_allow_html=True)
 st.markdown('<p class="subtitle">Votre espace partagé d\'agenda, d\'activités et de dépenses</p>', unsafe_allow_html=True)
@@ -217,9 +219,9 @@ noms_jours = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
 # Affichage des 7 colonnes pour le bandeau
 cols_bandeau = st.columns(7)
 
-# CSS pour le bandeau
-st.markdown("""
-<style>
+# CSS pour le bandeau - dedent complet pour éviter l'interprétation Markdown Code
+style_bandeau = textwrap.dedent("""
+    <style>
     .bandeau-card {
         background: #ffffff;
         border-radius: 12px;
@@ -291,8 +293,9 @@ st.markdown("""
         text-overflow: ellipsis;
         white-space: nowrap;
     }
-</style>
-""", unsafe_allow_html=True)
+    </style>
+""")
+st.markdown(style_bandeau, unsafe_allow_html=True)
 
 for idx, jour_date in enumerate(jours_semaine):
     d_str = str(jour_date)
@@ -316,15 +319,14 @@ for idx, jour_date in enumerate(jours_semaine):
         except:
             pass
             
-    # Contenu HTML
-    html_col = f"""
-    <div class="{card_class}">
-        <div class="bandeau-day-name">{noms_jours[idx]}</div>
-        <div class="bandeau-day-num">{jour_date.day}</div>
-        <span class="{badge_class}">{parent_g}</span>
-        <div style="margin-top: 6px;">{acts_html}</div>
-    </div>
-    """
+    # Construction de la chaîne HTML sans aucun retrait/indentation multiligne
+    html_col = f'<div class="{card_class}">' \
+               f'<div class="bandeau-day-name">{noms_jours[idx]}</div>' \
+               f'<div class="bandeau-day-num">{jour_date.day}</div>' \
+               f'<span class="{badge_class}">{parent_g}</span>' \
+               f'<div style="margin-top: 6px;">{acts_html}</div>' \
+               f'</div>'
+               
     cols_bandeau[idx].markdown(html_col, unsafe_allow_html=True)
 
 st.markdown("<hr style='margin: 20px 0;'>", unsafe_allow_html=True)
@@ -368,117 +370,109 @@ with tab1:
     
     cal = calendar.monthcalendar(a_choisie, m_choisi)
     
-    # CSS du calendrier mensuel premium
-    st.markdown("""
-    <style>
-    .cal-table {
-        width: 100%;
-        border-collapse: separate;
-        border-spacing: 8px;
-        text-align: center;
-    }
-    .cal-table th {
-        padding: 12px;
-        font-weight: 700;
-        color: #475569;
-        text-transform: uppercase;
-        font-size: 0.85em;
-        border-bottom: 2px solid #e2e8f0;
-    }
-    .cal-table td {
-        height: 125px;
-        width: 14%;
-        background: #ffffff;
-        border-radius: 16px;
-        border: 1px solid #f1f5f9;
-        vertical-align: top;
-        padding: 10px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.01);
-        transition: transform 0.2s, box-shadow 0.2s;
-    }
-    .cal-table td:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 10px 18px rgba(0,0,0,0.06);
-        background: #fafafa;
-    }
-    .jour-num-container {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-weight: 800;
-        font-size: 1.1em;
-        color: #0f172a;
-    }
-    .note-badge {
-        background: #fef3c7;
-        color: #d97706;
-        font-size: 0.7em;
-        padding: 1px 4px;
-        border-radius: 6px;
-        border: 1px solid #fde68a;
-    }
-    
-    /* Styles des parents sur le calendrier mensuel */
-    .cal-garde-p1 {
-        background: linear-gradient(135deg, #e3f2fd, #bbdefb);
-        color: #1e3a8a;
-        border: 1px solid #90caf9;
-        border-radius: 8px;
-        padding: 4px 6px;
-        font-size: 0.8em;
-        font-weight: bold;
-        margin-top: 6px;
-        text-align: center;
-    }
-    .cal-garde-p2 {
-        background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
-        color: #065f46;
-        border: 1px solid #a5d6a7;
-        border-radius: 8px;
-        padding: 4px 6px;
-        font-size: 0.8em;
-        font-weight: bold;
-        margin-top: 6px;
-        text-align: center;
-    }
-    .cal-exception {
-        background: linear-gradient(135deg, #fff3e0, #ffe0b2);
-        color: #92400e;
-        border: 2px dashed #f59e0b;
-        border-radius: 8px;
-        padding: 4px 6px;
-        font-size: 0.8em;
-        font-weight: 800;
-        margin-top: 6px;
-        text-align: center;
-    }
-    .cal-act-badge {
-        background-color: #f8fafc;
-        font-size: 0.75em;
-        margin-top: 4px;
-        text-align: left;
-        padding: 3px 5px;
-        border-radius: 5px;
-        border-left: 3px solid #3b82f6;
-        color: #334155;
-        font-weight: 500;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+    # CSS du calendrier mensuel premium - Dédenté à plat
+    style_calendrier = textwrap.dedent("""
+        <style>
+        .cal-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 8px;
+            text-align: center;
+        }
+        .cal-table th {
+            padding: 12px;
+            font-weight: 700;
+            color: #475569;
+            text-transform: uppercase;
+            font-size: 0.85em;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        .cal-table td {
+            height: 125px;
+            width: 14%;
+            background: #ffffff;
+            border-radius: 16px;
+            border: 1px solid #f1f5f9;
+            vertical-align: top;
+            padding: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.01);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .cal-table td:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 18px rgba(0,0,0,0.06);
+            background: #fafafa;
+        }
+        .jour-num-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 800;
+            font-size: 1.1em;
+            color: #0f172a;
+        }
+        .note-badge {
+            background: #fef3c7;
+            color: #d97706;
+            font-size: 0.7em;
+            padding: 1px 4px;
+            border-radius: 6px;
+            border: 1px solid #fde68a;
+        }
+        
+        /* Styles des parents sur le calendrier mensuel */
+        .cal-garde-p1 {
+            background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+            color: #1e3a8a;
+            border: 1px solid #90caf9;
+            border-radius: 8px;
+            padding: 4px 6px;
+            font-size: 0.8em;
+            font-weight: bold;
+            margin-top: 6px;
+            text-align: center;
+        }
+        .cal-garde-p2 {
+            background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+            color: #065f46;
+            border: 1px solid #a5d6a7;
+            border-radius: 8px;
+            padding: 4px 6px;
+            font-size: 0.8em;
+            font-weight: bold;
+            margin-top: 6px;
+            text-align: center;
+        }
+        .cal-exception {
+            background: linear-gradient(135deg, #fff3e0, #ffe0b2);
+            color: #92400e;
+            border: 2px dashed #f59e0b;
+            border-radius: 8px;
+            padding: 4px 6px;
+            font-size: 0.8em;
+            font-weight: 800;
+            margin-top: 6px;
+            text-align: center;
+        }
+        .cal-act-badge {
+            background-color: #f8fafc;
+            font-size: 0.75em;
+            margin-top: 4px;
+            text-align: left;
+            padding: 3px 5px;
+            border-radius: 5px;
+            border-left: 3px solid #3b82f6;
+            color: #334155;
+            font-weight: 500;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        </style>
+    """)
+    st.markdown(style_calendrier, unsafe_allow_html=True)
 
-    html_cal = """<table class="cal-table">
-    <tr>
-        <th>Lundi</th>
-        <th>Mardi</th>
-        <th>Mercredi</th>
-        <th>Jeudi</th>
-        <th>Vendredi</th>
-        <th>Samedi</th>
-        <th>Dimanche</th>
-    </tr>"""
+    html_cal = '<table class="cal-table"><tr><th>Lundi</th><th>Mardi</th><th>Mercredi</th><th>Jeudi</th><th>Vendredi</th><th>Samedi</th><th>Dimanche</th></tr>'
 
     for semaine in cal:
         html_cal += "<tr>"
@@ -510,16 +504,12 @@ with tab1:
                     except:
                         pass
                 
-                html_cal += f"""
-                <td>
-                    <div class="jour-num-container">
-                        <span>{jour}</span>
-                        {note_indicator}
-                    </div>
-                    <div class="{cl_parent}">{parent_g}</div>
-                    <div style="margin-top: 5px; max-height: 70px; overflow-y: auto;">{acts_html}</div>
-                </td>
-                """
+                # Construction sur une seule ligne stricte pour interdire le comportement code block Markdown
+                html_cal += f'<td>' \
+                            f'<div class="jour-num-container"><span>{jour}</span>{note_indicator}</div>' \
+                            f'<div class="{cl_parent}">{parent_g}</div>' \
+                            f'<div style="margin-top: 5px; max-height: 70px; overflow-y: auto;">{acts_html}</div>' \
+                            f'</td>'
         html_cal += "</tr>"
     html_cal += "</table>"
     st.markdown(html_cal, unsafe_allow_html=True)
