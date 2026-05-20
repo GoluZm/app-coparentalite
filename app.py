@@ -144,8 +144,8 @@ st.sidebar.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-nom_p1 = st.sidebar.text_input("Prénom du Parent 1", "Papa")
-nom_p2 = st.sidebar.text_input("Prénom du Parent 2", "Maman")
+nom_p1 = st.sidebar.text_input("Prénom du parent 1", "Papa")
+nom_p2 = st.sidebar.text_input("Prénom du parent 2", "Maman")
 
 st.sidebar.markdown("<hr style='margin: 15px 0;'>", unsafe_allow_html=True)
 st.sidebar.markdown("<h3 style='font-weight: 600; font-size: 1.1em; margin-bottom: 5px;'>🔄 Roulement de garde</h3>", unsafe_allow_html=True)
@@ -570,7 +570,7 @@ with tab2:
             d1 = c1.date_input("Du", key="act_d1")
             d2 = c2.date_input("Au", value=d1, key="act_d2")
             t = st.selectbox("Type", ["🏫 École", "⚽ Sport", "🩺 Médical", "🎨 Loisirs", "🪙 Autre"])
-            desc = st.text_input("Description / Intitulé", placeholder="Ex : Trail des Boucles Ardennaises")
+            desc = st.text_input("Description / Intitulé", placeholder="Ex : Camp louveteaux,")
             resp = st.radio("Parent en charge", [nom_p1, nom_p2, "Les deux"])
             
             if st.form_submit_button("Ajouter à l'agenda", use_container_width=True):
@@ -638,7 +638,7 @@ with tab3:
         with st.form("add_frais", clear_on_submit=True):
             type_op = st.radio("Type d'opération :", [
                 "🔴 Dépense (Achat commun à diviser)", 
-                "🟢 Rentrée d'argent (Remboursement tiers, allocs, mutuelle...)",
+                "🟢 Rentrée d'argent (Remboursement tiers, mutuelle...)",
                 "🔄 Virement de remboursement (D'un parent à l'autre)"
             ], horizontal=True)
             
