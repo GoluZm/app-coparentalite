@@ -117,8 +117,7 @@ style_global = textwrap.dedent("""
         border-radius: 10px;
         color: #475569;
         font-weight: 600;
-        padding: 10px 40px;
-        min-width: 50px;
+        padding: 15px 25px;
         transition: all 0.3s ease;
         border: none;
     }
